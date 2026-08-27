@@ -1264,39 +1264,8 @@ export default function App() {
   const qrLibRef = useRef(null);
   const loadQRCode = useRef(null);
   if (!loadQRCode.current) {
-    loadQRCode.current = new Promise((resolve, reject) => {
-      if (qrLibRef.current) { resolve(); return; }
-      const script = document.createElement('script');
-      script.src = '/js/qrcode.min.js';
-      // SRI hash of app/ui/public/js/qrcode.min.js. If you replace that
-      // file, recompute with: openssl dgst -sha384 -binary <file> | base64
-      script.integrity = 'sha384-HGmnkDZJy7mRkoARekrrj0VjEFSh9a0Z8qxGri/kTTAJkgR8hqD1lHsYSh3JdzRi';
-      script.crossOrigin = 'anonymous';
-      // Wall-clock timeout: a network attacker who holds the script TCP
-      // connection open without sending the close-of-body byte (slowloris)
-      // would otherwise pin this Promise forever, hanging every consumer
-      // of loadQRCode.current and breaking QR display until page reload.
-      // 15 s is well past a normal LAN/WAN fetch of a ~10 KB script.
-      let settled = false;
-      const settle = (fn) => { if (settled) return; settled = true; clearTimeout(timer); fn(); };
-      const timer = setTimeout(() => settle(() => {
-        loadQRCode.current = null; // allow next attempt to retry the load
-        reject(new Error('QR script load timed out'));
-      }), 15000);
-      script.onload = () => settle(() => {
-        qrLibRef.current = window.QRCode;
-        console.log('[RemoteMic] QR code library loaded');
-        setTimeout(resolve, 0);
-      });
-      script.onerror = (e) => settle(() => {
-        loadQRCode.current = null;
-        reject(new Error('QR script load error'));
-      });
-      document.head.appendChild(script);
-    });
-    // Swallow unhandled-rejection noise from the load Promise itself; the
-    // consumers attach their own .catch handlers where they care.
-    loadQRCode.current.catch(() => {});
+    // (parakeet-web-de: Remote-Mic/QR entfernt)
+    loadQRCode.current = Promise.resolve();
   }
 
   // Render QR code when both the URL is set and the DOM ref is available (status===waiting)
@@ -2656,160 +2625,8 @@ export default function App() {
   // transition, none of which change the vocab, and re-running the parse +
   // rebuild + warning-state writes on each of those froze the UI on a large
   // curated list (the textarea reconciled the whole list every time).
-  useEffect(() => {
-    const text = boostPhrases;
-    const tokenizer = modelRef.current?.tokenizer;
-    const sig = tokenizer?.id2token ? vocabSignature(tokenizer.id2token) : null;
-    // A completed decision is a completed "build": stamp the key so
-    // waitForBoostReady() doesn't hold runs for a trie that can't or needn't
-    // exist (no phrases, or no tokenizer yet).
-    const stampBuilt = () => {
-      boostBuiltKeyRef.current = boostBuildKey(text, boostDepthScaling, sig);
-    };
-
-    // Empty list: nothing to parse, encode or build. Handled synchronously, and
-    // without waking the worker, so clearing the box (or picking Disabled) takes
-    // boosting off immediately.
-    if (!text.trim()) {
-      phraseBoostRef.current = null;
-      boostEncodedRef.current = null;
-      setBoostWarnings([]);
-      setBoostConflicts([]);
-      setBoostUnkWarnings([]);
-      setBoostPhraseCount(0);
-      stampBuilt();
-      return;
-    }
-
-    // Use the server-prebuilt encoding when it matches the current text exactly
-    // (unedited) and the vocab it was built for matches the loaded tokenizer;
-    // that skips the BPE encode AND the augmentation expansion (the prebuilt
-    // baked both in), which is the difference between an insert-only rebuild and
-    // a from-scratch one. Augmentation is opt-in from the list text itself (a
-    // per-phrase `:AUG` field or a `*:::AUG` defaults line), so the global
-    // baseline is empty.
-    const pre = prebuiltBoostRef.current;
-    const augmentDefault = '';
-    const { usePrebuilt, reasons: prebuiltRejectReasons } = selectPrebuilt(pre, {
-      text, vocabSig: sig, augmentDefault,
-    });
-    // Without a tokenizer there is no trie to build, but the list can still be
-    // parsed for the count and the inline warnings, so ask the worker for a
-    // parse-only pass rather than bailing out entirely.
-    const canBuild = !!tokenizer;
-    const needEncode = canBuild && !usePrebuilt;
-
-    if (!canBuild) {
-      phraseBoostRef.current = null;
-      boostEncodedRef.current = null;
-      stampBuilt();
-      // A server-prebuilt artifact ships its own `skipped` list (the phrases the
-      // model vocab can't represent, computed against that vocab at prebuild
-      // time) and is fetched into prebuiltBoostRef the moment the list is
-      // selected. Surface it now so the untokenizable-words warning appears on
-      // list-load rather than only once the model is ready; the full rebuild
-      // recomputes it against the live tokenizer. Guard on text match so an
-      // edited list shows nothing stale (editing a curated list drops the
-      // prebuilt anyway).
-      const canPreview = pre && pre.text === text && Array.isArray(pre.skipped);
-      setBoostUnkWarnings(canPreview ? pre.skipped : []);
-    }
-
-    let cancelled = false;
-    // When a prebuilt exists but is rejected, say why: this is the difference
-    // between a fast (prebuilt) rebuild and a slow from-scratch BPE re-encode,
-    // so it is the first thing to check if a curated list is unexpectedly slow.
-    if (verboseLogRef.current && pre && !usePrebuilt && canBuild) {
-      console.log(`[Boost] prebuilt encoding present but NOT used; will BPE-encode in-browser. Reason: ${prebuiltRejectReasons.join('; ')}.`);
-    }
-    // Long lists take long enough to encode+build that the user should see the
-    // app is busy; small ones (or prebuilt ones, which only insert) rebuild in
-    // a few ms, so a spinner would only flash. The exact phrase count is only
-    // known once the worker replies, so the gate goes by the raw line count:
-    // the two differ only by comment/defaults lines.
-    const showSpinner = needEncode && boostLineCount >= BOOST_SPINNER_MIN_PHRASES;
-    const timer = setTimeout(async () => {
-      if (showSpinner) setBoostRebuilding(true);
-      const t0 = performance.now();
-      if (verboseLogRef.current) {
-        // Keep "[Boost] rebuilding trie" as the one-per-actual-rebuild marker
-        // (boost-rebuild-on-status.spec.js counts it); a parse-only pass builds
-        // nothing, so it gets its own wording.
-        console.log(canBuild
-          ? `[Boost] rebuilding trie for ${boostLineCount} line(s)`
-            + `${usePrebuilt ? ' (server-prebuilt encoding, skipping BPE)' : ''}...`
-          : `[Boost] parsing ${boostLineCount} line(s) for warnings only (no model loaded, nothing to build)...`);
-      }
-      try {
-        const res = await compileBoostPhrases(text, { encode: needEncode, tokenizer, augmentDefault });
-        if (cancelled) return;
-        // Display-only outputs, available on every path (including parse-only).
-        setBoostWarnings(res.warnings.map(w => ({ phrase: w.phrase })));
-        setBoostConflicts(res.conflicts);
-        setBoostPhraseCount(res.phraseCount);
-        // Parse-only pass: no model, so nothing to build. The key was already
-        // stamped synchronously above.
-        if (!canBuild) return;
-        // Text that is non-blank but holds no phrases (only comments/directives).
-        if (!res.phraseCount) {
-          phraseBoostRef.current = null;
-          boostEncodedRef.current = null;
-          setBoostUnkWarnings([]);
-          stampBuilt();
-          return;
-        }
-        const { encoded, skipped } = needEncode
-          ? { encoded: res.encoded, skipped: res.skipped }
-          : { encoded: pre.encoded, skipped: pre.skipped };
-        const count = encodedCount(encoded);
-        const trie = BoostingTrie.buildFromEncoded(encoded, {
-          strength: boostStrengthRef.current,
-          depthScaling: boostDepthScaling,
-          // Carry the live decode-time override into the fresh trie (0 = off).
-          minpOverride: boostMinpRef.current, // null = off (per-phrase gates); 0 = boost all; 1 = disabled
-        });
-        trie.skipped = skipped;
-        // Phrases with characters the model vocab cannot represent (e.g. CJK)
-        // were dropped during encode; surface them so the user knows why.
-        setBoostUnkWarnings(skipped);
-        phraseBoostRef.current = trie.isEmpty ? null : trie;
-        // Stash the cloneable ids + params so the decode worker can rebuild an
-        // equivalent trie (the live trie instance cannot cross postMessage).
-        boostEncodedRef.current = trie.isEmpty ? null : {
-          encoded,
-          strength: boostStrengthRef.current,
-          depthScaling: boostDepthScaling,
-          minpOverride: boostMinpRef.current,
-        };
-        stampBuilt();
-        if (verboseLogRef.current) {
-          const ms = performance.now() - t0;
-          const perLine = count ? ms / count : 0;
-          console.log(
-            `[Boost] trie rebuilt in ${ms.toFixed(1)}ms for ${count} entr(ies) `
-            + `(avg ${perLine.toFixed(3)}ms/line, ${trie.size} inserted, ${skipped.length} skipped`
-            + `${usePrebuilt ? ', prebuilt' : ''}).`
-          );
-        }
-      } catch (e) {
-        if (cancelled) return;
-        console.warn('[Boost] failed to build boosting trie:', e);
-        phraseBoostRef.current = null;
-        // A failed build is complete too: waiting longer would not produce a
-        // trie, so release any waiter (the run proceeds unboosted, as before).
-        stampBuilt();
-      } finally {
-        if (showSpinner) setBoostRebuilding(false);
-      }
-    }, BOOST_REBUILD_DEBOUNCE_MS);
-    return () => { cancelled = true; clearTimeout(timer); if (showSpinner) setBoostRebuilding(false); };
-    // boostDepthScaling is a dep (unlike strength/min-p, which mutate the live
-    // trie) because insert() bakes it into every node bonus, so a change needs
-    // a rebuild. The rebuild is debounced and, on the prebuilt/cached path,
-    // insert-only, so this stays cheap for curated lists. boostLineCount is
-    // derived from boostPhrases (so it never fires on its own); it is listed
-    // because the spinner gate reads it.
-  }, [boostPhrases, boostLineCount, tokenizerVocabSig, compileBoostPhrases, boostDepthScaling]);
+  // (parakeet-web-de: Phrase-Boosting-Rebuild entfernt)
+  useEffect(() => { /* no-op */ }, []);
 
   // Apply the strength slider without rebuilding the trie.
   useEffect(() => {
@@ -3084,7 +2901,7 @@ export default function App() {
       // effect runs now (model became ready) and on a later vocab-changing swap,
       // but NOT on the unrelated status churn of recording/transcribing.
       const tk = modelRef.current?.tokenizer;
-      setTokenizerVocabSig(tk?.id2token ? vocabSignature(tk.id2token) : 'ready');
+      setTokenizerVocabSig(tk?.id2token ? 'sig' : 'ready');
       // Don't clobber a live recording's status: if the user started recording
       // while the model was still loading (Q2), leave the recording UI in place
       // (the captured audio drains through the queue when recording stops).
