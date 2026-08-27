@@ -37,7 +37,7 @@ function createDiarizerClient() { return null; }
 function findSilenceCuts() { return []; }
 function shouldPiecewise() { return false; }
 function runPiecewiseDiarization() { return null; }
-function getDiarizationModels() { return null; }
+function getDiarizationModels() { return Promise.resolve(null); }
 function assignSpeakersToWords() { return []; }
 function groupWordsIntoTurns() { return []; }
 function turnsToLabeledText() { return ''; }
