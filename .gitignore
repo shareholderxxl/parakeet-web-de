@@ -1,0 +1,56 @@
+node_modules
+dist
+!app/ui/vendor/**/dist/
+.env
+docker/.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+docs/
+
+__pycache__
+.git_original_during_wip
+.aider*
+data
+deploy.sh
+CLAUDE.md
+TEMP_PLAN.md
+
+framagit_murmure
+TODO.md
+# Local phrase-boosting scratch folder, except the curated lists we ship.
+phrase_boosting/*
+!phrase_boosting/french_medical.txt
+!phrase_boosting/french_medical.pwc
+!phrase_boosting/lorn.txt
+!phrase_boosting/lorn.pwc
+
+# WER bench run history (appended by scripts/wer-bench.mjs)
+bench_wer.md
+# wer-quants.py run log (appended; a RUN START banner delimits each run)
+wer-quants.log
+
+# Benchmark corpora sampled out of external datasets (hundreds of MB of audio).
+# Rebuild them from the source corpus with scripts/gen-medical-val-sets.mjs.
+benchmark_datasets
+
+# E2E (tier 3) artifacts and local model weights (downloaded, never committed)
+fallback_models
+# Candidate symlink farm built by scripts/quantize-int8-smoothquant.py
+fallback_models_sq
+# Standalone HF model-repo folder (its own git repo + multi-GB LFS weights)
+parakeet-tdt-0.6b-v3-optimized-onnx
+test-results
+playwright-report
+.playwright
+test/e2e/.cache
+
+audio_testfiles
+.serena
+.tokensave
+
+# parakeet-web-de: lokale Modell-Dateien (Download via hf, nicht ins Repo)
+models/
+app/ui/dist/

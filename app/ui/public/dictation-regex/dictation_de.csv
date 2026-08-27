@@ -1,0 +1,12 @@
+regex,remplacement
+^(komma|comma)\s*,\s*,
+^(punkt|satzende)\s*\.\s*.
+^(fragezeichen)\s*\?\s*?
+^(ausrufezeichen|ausrufungszeichen)\s*!\s*!
+^(semikolon|strichpunkt)\s*;\s*;
+^(doppelpunkt)\s*:\s*:
+^(gedankenstrich|bindestrich)\s*[-—]\s*-
+^(prozent)\s*%\s*%
+\bzwanzig euro\b,20 €
+\bzehn euro\b,10 €
+\bein euro\b,1 €

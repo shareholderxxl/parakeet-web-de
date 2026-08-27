@@ -1,0 +1,74 @@
+# Docker build context filter. The compose build sets `context: ..` (the
+# project root), so anything not excluded here is sent to the Docker
+# daemon and stored in the build cache. Two distinct risks if this file
+# is missing:
+#
+# 1. Host node_modules/ and dist/ shadow whatever `npm ci` produces and
+#    would be used verbatim if a future Dockerfile change broadens the
+#    COPY scope. A compromised developer machine would then leak code
+#    into every build, bypassing the lockfile entirely.
+# 2. Local dev artifacts (TLS cert keys, .env files with secrets) end
+#    up in the build context and may land in the image's layer cache.
+
+# Dependencies (must be installed inside the image, never copied from host)
+node_modules/
+**/node_modules/
+
+# Build outputs (re-emitted by the builder stage)
+dist/
+**/dist/
+!app/ui/vendor/**/dist/
+
+# Local secrets and TLS keys (vite dev server, docker compose). The `**/`
+# variants matter: each compose stack keeps its own .env next to its
+# docker-compose.yml (docker/, scripts/openai-like-server/), and a bare `.env`
+# pattern only matches the one at the context root.
+.env
+.env.*
+**/.env
+**/.env.*
+docker/.env
+*.pem
+*.key
+*.crt
+
+# VCS metadata (not needed at build time, balloons the context)
+.git/
+.gitignore
+
+# Editor / IDE droppings
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude / agent metadata (local-only)
+.claude/
+CLAUDE.md
+
+# Local-only tooling. (scripts/ is tracked, not gitignored -- the old comment
+# here claimed otherwise; almost none of it belongs in a build context, but the
+# OpenAI-like API server does: its Dockerfile builds from the REPO ROOT so it can
+# copy app/src, and it needs both its own directory and scripts/transcribe.mjs,
+# the model/ffmpeg glue it imports so the API and the CLI cannot drift apart.)
+scripts/*
+!scripts/openai-like-server
+!scripts/transcribe.mjs
+# ...and the precompressor: the builder stage runs it over app/ui/dist to emit
+# the brotli sidecars Caddy serves, and the runtime image keeps a copy for the
+# opt-in PRECOMPRESS_MODELS pass over the mounted model folder.
+!scripts/precompress.mjs
+# ...but never a host node_modules inside it: the builder stage runs `npm ci`
+# from the lockfile, and copying a host tree in would defeat that.
+scripts/openai-like-server/node_modules/
+data/
+deploy.sh
+TODO.md
+# Benchmark reports synced down from the instance by deploy.sh: local analysis
+# data that would otherwise be shipped into every build context (and grow it
+# without bound). The container reaches them through a bind mount, never a COPY.
+benchmark_reports/

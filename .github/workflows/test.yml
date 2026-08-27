@@ -1,0 +1,86 @@
+# CI test gate for pull requests. Mirrors the local pre-push hook (the fast
+# tiers) and adds the heavy tier-3 E2E as a separate job.
+#
+# NOTE: to make these checks actually BLOCK a merge, a repo admin must enable
+# them as required status checks under Settings -> Branches -> branch protection
+# (the workflow alone runs the checks but does not enforce them).
+#
+# Generated with Claude Code.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [master, fork]
+
+jobs:
+  fast:
+    # Tier 1 (unit) + tier 2 (http integration). Fast, no model download.
+    name: unit + http
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Tier-1 imports parakeet.js (needs onnxruntime-web); tier-2 spawns the
+      # signaling server (needs express + ws). Each package vendors its own lock.
+      - name: Install app deps (onnxruntime-web)
+        run: npm ci
+        working-directory: app
+      - name: Install signaling deps (express, ws)
+        run: npm ci
+        working-directory: signaling
+      - name: Run unit + http tiers
+        run: npm test
+
+  e2e:
+    # Tier 3: full-transcription happy path in headless Chromium. Heavy (~1.7 GB
+    # of weights: both int8 encoders, the decoder, and the diarization pair), so
+    # they are cached across runs.
+    name: e2e (full transcription)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PARAKEET_E2E_MODEL_DIR: ${{ github.workspace }}/.e2e-models
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install root deps (Playwright)
+        run: npm ci
+      - name: Install UI deps
+        run: npm ci
+        working-directory: app/ui
+      - name: Build UI
+        run: npm run build
+        working-directory: app/ui
+
+      - name: Cache int8 model weights
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PARAKEET_E2E_MODEL_DIR }}
+          # Keyed on the fetch list itself: editing scripts/fetch-e2e-models.mjs
+          # (new file, repo/revision change, optional -> required flip) mints a
+          # fresh cache so newly listed weights get baked in. Optional entries
+          # that 404'd at save time are retried every run (cheap HEAD-sized
+          # miss) until a list edit re-keys the cache.
+          key: parakeet-e2e-models-${{ hashFiles('scripts/fetch-e2e-models.mjs') }}
+      - name: Fetch model weights (cache miss only)
+        run: npm run e2e:models
+
+      # The batching numeric-equivalence gate (batched encode is byte-identical
+      # to standalone encode) is a tier-1 unit test, but it needs the real int8
+      # weights and so SELF-SKIPS in the fast job (which downloads no model).
+      # Run it here, where the weights already exist, so a batching regression
+      # cannot merge green. Uses the vendored ORT (no extra deps); modelDir comes
+      # from PARAKEET_E2E_MODEL_DIR (the flat int8 set fetch-e2e-models writes).
+      - name: Batching equivalence gate (needs weights)
+        run: node --test test/unit/encode-batch-equivalence.test.mjs
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E
+        run: npm run test:e2e

@@ -1,0 +1,227 @@
+services:
+  parakeetweb:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        # Run `npm audit --audit-level=high` at build time; fails the build on
+        # any high-severity vulnerability. Set RUN_NPM_AUDIT=false in .env to
+        # opt out (e.g. when a known CVE is triaged but not yet patched
+        # upstream).
+        RUN_NPM_AUDIT: ${RUN_NPM_AUDIT:-true}
+    restart: unless-stopped
+    container_name: parakeetweb
+    # Run as non-root (UID 1000, created in the Dockerfile). Combined with
+    # cap_drop:ALL, no-new-privileges, and the read-only rootfs, this keeps
+    # the blast radius of any RCE minimal. UID 1000 also matches the default
+    # host user on most Linux distros so bind-mounted ./fallback_models is
+    # readable without extra chown.
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Read-only root filesystem; writable paths are explicit below.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+      # The container runs as UID 1000; without explicit ownership options,
+      # docker mounts these tmpfs as root:root mode 755 and the entrypoint
+      # cannot write into them. /run/config additionally needs UID 1000 to
+      # OWN the directory because F-112 chmods /run/config itself to 0500
+      # after generating config.js (chmod requires ownership, not just write).
+      # Caddy also runs as UID 1000 and writes into /config/caddy + /data/caddy.
+      - /var/regex:uid=1000,gid=1000,mode=0700
+      - /var/boost:uid=1000,gid=1000,mode=0700
+      - /run/config:uid=1000,gid=1000,mode=0700
+      - /config/caddy:uid=1000,gid=1000,mode=0700
+      - /data/caddy:uid=1000,gid=1000,mode=0700
+    volumes:
+      # Curated phrase-boosting lists shipped in the repo (french_medical.txt
+      # plus its precompiled french_medical.pwc). Read-only: the entrypoint only
+      # copies these out of BOOST_PHRASES_SOURCE into a tmpfs. Path is relative
+      # to this compose file (docker/), so it points at the repo's
+      # phrase_boosting/ folder. See BOOST_PHRASES_SOURCE / VITE_PHRASE_BOOST_DEFAULT below.
+      - ../phrase_boosting:/boost-defaults:ro
+
+      # Local model fallback: bind-mount a host folder of ONNX files (flat
+      # layout: vocab.txt + .onnx files directly inside, OR a nested
+      # <repoId>/ subfolder which the entrypoint descends into) into the
+      # container, then set LOCAL_MODEL_PATH below to the in-container target.
+      # Caddy serves it under /models/. Pre-populate the host folder with e.g.:
+      #   hf download Olicorne/parakeet-tdt-0.6b-v3-optimized-onnx --local-dir /host/path
+      # Drop the `:ro` if you set PRECOMPRESS_MODELS below, which writes the
+      # `.zst` sidecars into this folder at boot.
+      # - /host/path/to/onnx-files:/models:ro
+
+      # Custom dictation regex rules: uncomment and set the host path to a folder
+      # containing your own CSV regex files (overrides the default Murmure download).
+      # - /path/to/my/regex-csvs:/custom-regex:ro
+
+      # Benchmark reports: uncomment (together with BENCHMARK_REPORTS_DIR below)
+      # to let visitors send the anonymised report the sidebar Benchmark section
+      # produces. One JSON file per report, named by the server. Writable, and
+      # the host folder must be owned by UID 1000 or the entrypoint disables the
+      # feature with a warning (`deploy.sh` creates and chowns it for you).
+      # - ../benchmark_reports:/benchmark-reports
+    # Resource limits to mitigate denial-of-service risk.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    ports:
+      - "127.0.0.1:5173:5173"
+    environment:
+      - VITE_DEV_MODE=${VITE_DEV_MODE:-false}
+      - VITE_ANALYTICS_URL=${VITE_ANALYTICS_URL}
+      - VITE_ANALYTICS_WEBSITE_ID=${VITE_ANALYTICS_WEBSITE_ID}
+      - VITE_ANALYTICS_SRI=${VITE_ANALYTICS_SRI:-}
+      - VITE_DICTATION_DEVICE_SUPPORT=${VITE_DICTATION_DEVICE_SUPPORT:-true}
+      - VITE_MODEL_REPO=${VITE_MODEL_REPO:-Olicorne/parakeet-tdt-0.6b-v3-optimized-onnx}
+      - VITE_MODEL_REVISION=${VITE_MODEL_REVISION:-}
+      # Where to fetch model weights from:
+      #   hf    : HuggingFace only (default)
+      #   local : instance-served /models/ only (requires LOCAL_MODEL_PATH)
+      #   both  : HF first, silent fallback to /models/ if HF is unreachable
+      # Auto-promoted to 'both' when LOCAL_MODEL_PATH is set and the operator
+      # left this unset.
+      - VITE_MODEL_SOURCE=${VITE_MODEL_SOURCE:-${LOCAL_MODEL_PATH:+both}}
+      # In-container path of the bind-mounted ONNX folder (must match the
+      # container side of the volume above). Caddy serves this directory at
+      # /models/. Leave unset to disable local fallback entirely.
+      - LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-}
+      # Generate the zstd sidecars Caddy serves for the local weights, at boot,
+      # instead of only warning about stale ones (841 MB -> 643 MB on the int8
+      # encoder). Needs the model mount WRITABLE (drop its `:ro`); costs
+      # ~30-90 s on the first boot after a model change and nothing afterwards.
+      # Leave unset to prepare them on the host instead:
+      #   node scripts/precompress.mjs --models <model-dir>
+      - PRECOMPRESS_MODELS=${PRECOMPRESS_MODELS:-}
+      # Custom dictation regex source: GitLab repo URL or local path (e.g. /custom-regex)
+      - DICTATION_REGEX_SOURCE=${DICTATION_REGEX_SOURCE:-}
+      # Phrase-boosting lists: folder of .txt files or https URL to one .txt.
+      # Defaults to the repo's curated lists bind-mounted at /boost-defaults
+      # above (french_medical). Set to empty in .env to serve no lists.
+      - BOOST_PHRASES_SOURCE=${BOOST_PHRASES_SOURCE:-/boost-defaults}
+      # Default boost list to pre-select for new visitors (bare name or
+      # <name>.txt). Must match a served list or the container refuses to start.
+      # Defaults to the shipped french_medical list. Per-link override:
+      # ?phrase_boost=<name>. Neither overrides a saved choice.
+      - VITE_PHRASE_BOOST_DEFAULT=${VITE_PHRASE_BOOST_DEFAULT:-french_medical}
+      # Opt into the composed WASM decode pipeline (decode worker running
+      # alongside the encode pool). Unset leaves the decode worker WebGPU-only,
+      # which is the default because composed measured as a wash on wall clock.
+      - VITE_WASM_DECODE_PIPELINE=${VITE_WASM_DECODE_PIPELINE:-}
+      # Benchmark report collection. Set this to the in-container path of a
+      # WRITABLE bind-mounted folder (see the ./benchmark_reports volume above)
+      # to let visitors send the anonymised report the sidebar Benchmark
+      # section produces. The entrypoint probes the folder and derives the
+      # client-side VITE_BENCHMARK_UPLOAD from it, so unset means the section
+      # still benchmarks but never offers to send anything. The folder must be
+      # owned by UID 1000 (deploy.sh chowns it, like fallback_models).
+      - BENCHMARK_REPORTS_DIR=${BENCHMARK_REPORTS_DIR:-}
+      # Disk backstop: refuse new reports once the folder holds this many
+      # files (~32 KB each, so the default caps it around 640 MB).
+      - BENCHMARK_REPORTS_MAX_FILES=${BENCHMARK_REPORTS_MAX_FILES:-}
+      # Remote microphone signaling server (shares coturn with WebSend)
+      - STUN_SERVER=${STUN_SERVER:-}
+      - TURN_SERVER=${TURN_SERVER:-}
+      - TURN_SECRET=${TURN_SECRET:-}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-3600}
+      - TURN_TIMEOUT=${TURN_TIMEOUT:-15}
+      - STUN_GOOGLE_FALLBACK=${STUN_GOOGLE_FALLBACK:-true}
+      - TURNS_PORT=${TURNS_PORT:-}
+      - SIGNALING_PORT=${SIGNALING_PORT:-3001}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      # HTTPS relay fallback (WebSocket + long-poll) for networks that
+      # block direct WebRTC and TURN/TURNS. RELAY_ENABLE gates the
+      # signaling-server endpoints; VITE_RELAY_ENABLE gates the client
+      # race. Set either to "false" to disable. Tuning knobs
+      # (RELAY_MAX_*, RELAY_LP_*, RELAY_WS_*) accept their defaults
+      # unless explicitly set.
+      - RELAY_ENABLE=${RELAY_ENABLE:-}
+      - VITE_RELAY_ENABLE=${VITE_RELAY_ENABLE:-}
+      - RELAY_MAX_TOTAL_SESSION_BYTES=${RELAY_MAX_TOTAL_SESSION_BYTES:-}
+      - RELAY_MAX_CONTROL_MSG_BYTES=${RELAY_MAX_CONTROL_MSG_BYTES:-}
+      - RELAY_LP_DOWN_TIMEOUT_MS=${RELAY_LP_DOWN_TIMEOUT_MS:-}
+      - RELAY_LP_QUEUE_MAX_FRAMES=${RELAY_LP_QUEUE_MAX_FRAMES:-}
+      - RELAY_LP_FRAME_BODY_LIMIT=${RELAY_LP_FRAME_BODY_LIMIT:-}
+      - RELAY_LP_SLOT_IDLE_TIMEOUT_MS=${RELAY_LP_SLOT_IDLE_TIMEOUT_MS:-}
+      - RELAY_WS_PING_INTERVAL_MS=${RELAY_WS_PING_INTERVAL_MS:-}
+      # F-142: forward operator HSTS / CSP overrides so the Caddyfile's
+      # {$VITE_HSTS_*} / {$VITE_CSP_*} substitutions resolve to non-empty
+      # values when set in .env. Without these the documented overrides
+      # silently no-op and HSTS stays bare 1y / CSP stays at the baked-in
+      # host allowlists.
+      - VITE_HSTS_MAX_AGE=${VITE_HSTS_MAX_AGE:-}
+      - VITE_HSTS_SUFFIX=${VITE_HSTS_SUFFIX:-}
+      - VITE_CSP_SCRIPT_HOSTS=${VITE_CSP_SCRIPT_HOSTS:-}
+      - VITE_CSP_CONNECT_HOSTS=${VITE_CSP_CONNECT_HOSTS:-}
+
+  # ── coturn TURN relay server (optional) ─────────────────────────────
+  # If you already run a coturn instance (e.g. for WebSend or Nextcloud Talk),
+  # you can skip this service and point STUN_SERVER / TURN_SERVER / TURN_SECRET
+  # to your existing server instead.
+  #
+  # To use this bundled coturn, uncomment the block below and set
+  # TURN_SERVER, TURN_SECRET and TURN_EXTERNAL_IP in your .env file.
+  # Without a TURN server the remote mic feature still works when direct
+  # peer-to-peer WebRTC succeeds (same LAN), but will fail through
+  # symmetric NAT or restrictive firewalls.
+  # ─────────────────────────────────────────────────────────────────────
+  # coturn:
+  #   image: coturn/coturn:latest
+  #   container_name: coturn
+  #   ports:
+  #     # Change 3478 if it conflicts with another coturn instance
+  #     - "3478:3478/udp"
+  #     - "3478:3478/tcp"
+  #     - "49152-49161:49152-49161/udp"
+  #   # To enable TURNS (TURN-over-TLS), remove --no-tls and add:
+  #   #   --tls-listening-port=${TURNS_PORT:-8443}
+  #   #   --cert=/etc/coturn/certs/cert.pem
+  #   #   --pkey=/etc/coturn/certs/key.pem
+  #   # Then mount the certificate files via a volume:
+  #   #   volumes:
+  #   #     - /path/to/certs:/etc/coturn/certs:ro
+  #   # And expose the TURNS port:
+  #   #     - "${TURNS_PORT:-8443}:${TURNS_PORT:-8443}/tcp"
+  #   #
+  #   # Docker NAT: --external-ip format is PUBLIC_IP/INTERNAL_IP.
+  #   # 0.0.0.0 as internal means "all container interfaces" (correct for Docker).
+  #   # NOTE: TURN_EXTERNAL_IP must be an IP address, NOT a hostname — coturn
+  #   # does not resolve DNS for --external-ip.
+  #   command: >
+  #     -n
+  #     --log-file=stdout
+  #     --use-auth-secret
+  #     --static-auth-secret=${TURN_SECRET}
+  #     --fingerprint
+  #     --no-multicast-peers
+  #     --no-cli
+  #     --no-dtls
+  #     --no-tls
+  #     --realm=parakeetweb
+  #     --min-port=49152
+  #     --max-port=49161
+  #     --listening-port=3478
+  #     --external-ip=${TURN_EXTERNAL_IP:-127.0.0.1}
+  #     --check-origin-consistency
+  #     --cpus=1
+  #   cap_drop:
+  #     - ALL
+  #   cap_add:
+  #     - NET_BIND_SERVICE
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp:size=10M,mode=1777
+  #   privileged: false
+  #   # coturn image runs as root by default; the other hardening measures mitigate this.
+  #   user: "0:0"
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 128M
+  #         cpus: '0.5'

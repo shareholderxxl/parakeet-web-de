@@ -1,0 +1,378 @@
+# Caddyfile for parakeetweb production image.
+# Serves the built Vite bundle from /srv and proxies signaling traffic to the
+# in-container Node sidecar started by entrypoint.sh.
+
+{
+	# Caddy admin API isn't needed for this single-process container.
+	admin off
+	persist_config off
+}
+
+:5173 {
+	# F-77: compress static assets but NOT /api/signal/*. Today no
+	# signaling response reflects the X-Room-Secret header into the
+	# body, but a single future debug-echo line (e.g.
+	# `res.json({ error, received: req.headers['x-room-secret'] })`)
+	# would turn this back into a classic BREACH oracle: same-origin
+	# attacker code could measure compressed response sizes to recover
+	# the secret byte-by-byte. Signaling JSON is < 2 KB; the bandwidth
+	# saving is negligible, the foot-gun isn't.
+	@compress not path /api/signal/*
+	encode @compress zstd gzip
+
+	# Cross-origin isolation (SharedArrayBuffer / WebGPU / ONNX wasm) plus a
+	# strict default-deny Content-Security-Policy. The CSP forbids inline
+	# scripts (eruda loader is externalised + SRI), allows 'wasm-unsafe-eval'
+	# because ONNX Runtime Web needs it, and keeps style-src 'unsafe-inline'
+	# until the JSX inline-style migration in a later round. Connect-src
+	# allows the HuggingFace model fetch path and an operator-configurable
+	# allowlist via VITE_CSP_CONNECT_HOSTS (custom dictation regex CSV host,
+	# extra HF rotation subdomain, etc.). Script-src likewise extensible via
+	# VITE_CSP_SCRIPT_HOSTS. The analytics origin is derived from
+	# VITE_ANALYTICS_URL in entrypoint.sh and auto-appended to both lists, so
+	# operators only declare it once.
+	#
+	# _CSP_HF_HOSTS is computed by entrypoint.sh: the explicit set of HF
+	# subdomains (cas-bridge.xethub.hf.co for xet-based LFS, cdn-lfs.* for
+	# the older S3-backed path) when HF serving is allowed, empty when
+	# VITE_FORCE_LOCAL_MODEL_FALLBACK=true. It used to be a wildcard
+	# `*.huggingface.co *.hf.co`, but that would also match any future
+	# HF-controlled subdomain (including user-controllable ones if HF ever
+	# opens that namespace) and turn an XSS in the parakeet origin into an
+	# exfil channel through that subdomain. If HF rotates the CDN host,
+	# an operator can extend the list at runtime via VITE_CSP_CONNECT_HOSTS
+	# without rebuilding the image.
+	header {
+		# F-71: strip Caddy's default `Server: Caddy` response header so the
+		# reverse-proxy identity (and indirectly its version range, pinned
+		# by digest in Dockerfile) does not advertise itself to drive-by
+		# scanners (Shodan / ZoomEye / mass CVE probers). Free defense in
+		# depth against untargeted scans.
+		-Server
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		# F-96: dropped `data:` from img-src and font-src. No first-
+		# party code emits data: URLs (vite.config.js assetsInlineLimit
+		# is set to 0 to keep it that way). data: in img-src is a known
+		# CSS-injection-chained exfil channel via SVG; data: in font-src
+		# feeds CSS-position-leak via custom-font glyph timing. Both are
+		# unneeded.
+		# F-97: dropped `blob:` from child-src. No iframes / frames /
+		# blob-targeted nested browsing contexts exist in the codebase
+		# (only AudioWorklet.addModule and ORT's WASM/MJS loader use
+		# blob: URLs, and those fall under worker-src). child-src is
+		# tightened to 'none' to match frame-ancestors 'none'.
+		# `blob:` is allowed in connect-src and script-src because hub.js
+		# returns `URL.createObjectURL(modelBytes)` for IndexedDB-cached
+		# model files: the tokenizer fetches that URL as text and ORT
+		# fetches the encoder/decoder via InferenceSession.create(url)
+		# (both routed through connect-src), and ORT's threaded WASM
+		# proxy dynamic-imports its glue module from a blob: URL (routed
+		# through script-src-elem, which falls back to script-src). The
+		# bytes are same-origin (no cross-origin source can mint a blob:
+		# URL on parakeetweb.olicorne.org), so this is no broader than
+		# `'self'` for the same content.
+		# `data:` is allowed in media-src because keepalive.js plays a tiny
+		# inline silent WAV (1 second, 8 kHz mono, ~50 bytes base64) to opt
+		# the tab out of background timer throttling while recording. The
+		# bytes are constant and ship in the JS bundle, so this is no
+		# broader than `'self'` for the same content; data: in media-src
+		# is not a known script-execution surface.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: {$VITE_CSP_SCRIPT_HOSTS:}; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob: {$_CSP_HF_HOSTS:} {$VITE_CSP_CONNECT_HOSTS:}; worker-src 'self' blob:; child-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+		# Permissions-Policy: only microphone, camera (rear-camera QR
+		# re-scan on the remote-mic reconnect screen), hid (WebHID for
+		# SpeechMike) and clipboard-write are needed by the page.
+		# camera=(self) is required: the phone's "Scan QR code"
+		# re-pairing flow in remote-mic-entry.jsx calls
+		# getUserMedia({ video: { facingMode: 'environment' } }), and
+		# leaving camera=() blocks that at the policy layer so the
+		# browser never even prompts (Brave/Chrome silently
+		# NotAllowedError). Everything else is explicitly disabled so a
+		# compromised script cannot elicit a prompt for USB, serial,
+		# geolocation, etc.
+		# fullscreen=(self) is kept open for the legitimate UI fullscreen
+		# path.
+		#
+		# F-72: enumerate newer policy-controlled features that default to
+		# allow if omitted. browsing-topics / interest-cohort matter most
+		# (Topics API enrols a privacy-focused app's origin in ad-interest
+		# profiling unless explicitly denied); attribution-reporting and
+		# private-state-tokens are likewise advertising-side features.
+		# compute-pressure is a fingerprinting vector. unload=() prevents
+		# legacy unload-event timing channels. clipboard-write=(self)
+		# keeps the auto-copy feature working (sanitizeClipboardText
+		# flow) while clipboard-read stays denied.
+		# F-94: extend with newer advertising/ambient features that
+		# default to allow if omitted (run-ad-auction,
+		# join-ad-interest-group, shared-storage*, private-aggregation,
+		# publickey-credentials-create, otp-credentials,
+		# window-management, keyboard-map, digital-credentials-get,
+		# captured-surface-control, deferred-fetch, storage-access,
+		# wake-lock alias). Also tightens fullscreen from (self) to ()
+		# since no first-party code calls requestFullscreen.
+		# screen-wake-lock + its legacy wake-lock alias are allowed for
+		# same-origin (self) so keepalive.js can hold the screen awake
+		# while recording or while a remote-mic session is live. Without
+		# this, navigator.wakeLock.request('screen') throws a
+		# permissions-policy NotAllowedError on every visibilitychange
+		# and the recording UI can sleep mid-capture on mobile.
+		Permissions-Policy "accelerometer=(), ambient-light-sensor=(), attribution-reporting=(), autoplay=(), battery=(), bluetooth=(), browsing-topics=(), camera=(self), captured-surface-control=(), clipboard-read=(), clipboard-write=(self), compute-pressure=(), deferred-fetch=(), digital-credentials-get=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), gamepad=(), geolocation=(), gyroscope=(), hid=(self), idle-detection=(), interest-cohort=(), join-ad-interest-group=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(self), midi=(), otp-credentials=(), payment=(), picture-in-picture=(), private-aggregation=(), private-state-token-issuance=(), private-state-token-redemption=(), publickey-credentials-create=(), publickey-credentials-get=(), run-ad-auction=(), screen-wake-lock=(self), serial=(), shared-storage=(), shared-storage-select-url=(), speaker-selection=(), storage-access=(), unload=(), usb=(), wake-lock=(self), web-share=(), window-management=(), xr-spatial-tracking=()"
+		# Belt-and-braces clickjacking defense alongside frame-ancestors 'none'
+		# in CSP, for legacy browsers that ignore frame-ancestors.
+		X-Frame-Options "DENY"
+		# no-referrer: room ID + secret live in the URL hash (never sent in
+		# Referer), but the path /remote-mic.html and any future query
+		# parameters would otherwise leak to umami, HuggingFace and other
+		# cross-origin sub-resources. The site needs no referrer information
+		# from outside, so close the channel entirely.
+		Referrer-Policy "no-referrer"
+		# Forbid MIME-sniffing so a content-type-confusion attack against the
+		# operator-supplied dictation regex CSV or any future user-uploaded
+		# asset cannot escalate into script execution on a quirky browser.
+		X-Content-Type-Options "nosniff"
+		# F-149: discourage search engines and AI crawlers from indexing this
+		# deployment. Each instance is self-hosted by an operator for their
+		# own users; the canonical public site is the one promoted in the
+		# README, and clones picked up by crawlers only confuse users about
+		# which deployment they're trusting with their audio. Belt-and-braces
+		# with the public site's robots.txt: this header also covers archive
+		# crawlers and AI training scrapers that ignore robots.txt.
+		X-Robots-Tag "noindex, nofollow, noarchive"
+		# HSTS. TLS is normally terminated by the outer reverse proxy, which
+		# should already set this; setting it here as belt-and-braces means
+		# the header reaches clients even if the outer proxy is misconfigured.
+		# Browsers ignore HSTS over plain HTTP, so the in-container plain
+		# :5173 listener can carry it harmlessly. Default 1 year, no preload
+		# (operators must opt in to the preload list deliberately).
+		#
+		# F-70: includeSubDomains is OPT-IN via VITE_HSTS_SUFFIX. Defaulting
+		# it ON would permanently brick every sibling subdomain that still
+		# serves plain HTTP (legacy admin panel, internal status page, CI
+		# artifact host, etc.) for any visitor who opens parakeet even once;
+		# clients can only undo HSTS via chrome://net-internals per browser,
+		# making the operator mistake one-way and visitor-facing. Operators
+		# who own the full apex can opt in by setting
+		# VITE_HSTS_SUFFIX="; includeSubDomains" (or add "; preload" only
+		# after submitting to the HSTS preload list, which is irrevocable).
+		# F-145: default max-age raised from 1y (31536000) to 2y (63072000)
+		# to match Chrome/Firefox HSTS preload-list requirements. Operators
+		# who need a different value still override via VITE_HSTS_MAX_AGE.
+		Strict-Transport-Security "max-age={$VITE_HSTS_MAX_AGE:63072000}{$VITE_HSTS_SUFFIX:}"
+		# Cross-Origin-Resource-Policy: keep our resources to same-origin.
+		# COEP require-corp is already on; CORP same-origin is the matching
+		# response-side guarantee so sibling subdomains cannot read our
+		# config.js / model files / fonts via cross-origin fetches.
+		Cross-Origin-Resource-Policy "same-origin"
+	}
+
+	# ── Cache policy ──────────────────────────────────────────────────────
+	# Vite emits content-hashed filenames under /assets/ (e.g.
+	# main-Dg503GNh.js). Their bytes are bound to the filename, so they
+	# can be cached forever: a new build emits new filenames and the
+	# referencing HTML changes too. Mark them immutable so browsers and
+	# intermediate caches don't re-validate on every reload.
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+	# HTML entry points and the runtime /config.js MUST never be served
+	# stale. After a deploy, a user reusing a cached index.html (which
+	# references the OLD hashed asset names that no longer exist) would
+	# silently break. Same for /config.js when the operator changes envs:
+	# a stale cache would keep the old VITE_ANALYTICS_URL / SRI hash /
+	# model revision in play across container restarts.
+	@html {
+		path / /index.html /remote-mic.html
+	}
+	header @html Cache-Control "no-cache, must-revalidate"
+	# F-148: /config.js is the runtime-injected env (analytics URL, model
+	# revision, build-time SRI hashes, optional CSP host extensions). The
+	# bytes change per deploy and may carry per-operator secrets in env
+	# overrides; use no-store rather than no-cache so the disk cache never
+	# sees the bytes, defeating offline-attacker recovery from the cache
+	# file as well as any intermediate-cache misbehaviour.
+	header /config.js Cache-Control "no-store"
+
+	# F-75: the asset-integrity manifest is the trust anchor for the
+	# F-38/F-50 SRI chain (verifiedAddModule + ORT WASM hash check). A
+	# stale cached manifest paired with a freshly deployed asset can
+	# either DoS recording (false integrity failure: cached old hash,
+	# new bytes) or hide tampering (the cached manifest never sees the
+	# new pin). The file is tiny, revalidation is cheap.
+	#
+	# F-76: pcm-recorder-worklet.js sits at a STABLE URL (AudioWorklet
+	# loads it by string path) so the immutable @hashed rule doesn't
+	# match. Heuristic browser caching of the previous worklet against
+	# the freshly deployed asset-integrity.json triggers F-38b's hash
+	# mismatch and breaks recording until the cache evicts. Must
+	# revalidate on every load.
+	#
+	# F-110: /ort/manifest.json is the F-38a trust anchor for the ORT
+	# WASM blobs. It sits at a stable URL and the same stale-pair
+	# concern applies: a deploy that rolls onnxruntime-web ships new
+	# WASM bytes alongside a new manifest pinning their hashes; a
+	# browser that has the old manifest cached then hash-checks the
+	# new WASM against the old pin and fails. Same one-line fix as
+	# the worklet pair.
+	#
+	# F-143: the symmetric half. The manifest pins a sha384 of each
+	# `.wasm`/`.mjs` blob; if those are heuristically cached at stable
+	# URLs while the manifest is revalidated, the old WASM hashes
+	# against the new pin and recording fails closed. Pin the runtime
+	# blobs to no-cache too so the pair always rolls together.
+	@integrity {
+		path /.well-known/asset-integrity.json /pcm-recorder-worklet.js /ort/manifest.json /ort/*.wasm /ort/*.mjs
+	}
+	header @integrity Cache-Control "no-cache, must-revalidate"
+
+	# F-146: every other static path was relying on RFC 7234 browser
+	# heuristic freshness (Last-Modified-based, typically 10% of age), so
+	# cache policy was unreviewable and contributed to the F-143 class of
+	# stale-after-deploy failures for non-WASM assets (eruda-loader, the
+	# dictation regex CSVs). Pin the policy explicitly:
+	#  - /js/*, /favicon.svg: short-lived, must-revalidate (5 min). Catches
+	#    eruda-loader rotation without spamming revalidations.
+	#  - /dictation-regex/*: no-cache, must-revalidate so a regex-source
+	#    update reaches users on the next page load.
+	#  - /models/*: large (hundreds of MB) and the JS layer content-hashes
+	#    them on use, so they can be heuristically cached for a day, but
+	#    pin the rule so the intent is reviewable.
+	@stable_static path /js/* /favicon.svg
+	header @stable_static Cache-Control "public, max-age=300, must-revalidate"
+	@dictation_regex path /dictation-regex/*
+	header @dictation_regex Cache-Control "no-cache, must-revalidate"
+	@boost_phrases path /boost-phrases/*
+	header @boost_phrases Cache-Control "no-cache, must-revalidate"
+	@local_models path /models/*
+	header @local_models Cache-Control "public, max-age=86400, must-revalidate"
+
+	# Signaling: strip /api/signal prefix → /api on the local Node sidecar.
+	#
+	# `header_up -X-Forwarded-For` removes any X-Forwarded-For the client
+	# supplied before Caddy's reverse_proxy appends its own. Without this,
+	# Caddy's default APPEND behaviour would leave the attacker-supplied
+	# entry leftmost, and Node (with `trust proxy: 'loopback'`) honours
+	# the leftmost entry as req.ip - giving the attacker a one-line
+	# bypass of every per-IP rate limiter. Same treatment for X-Real-IP
+	# and X-Forwarded-Host to keep the upstream's view of the client
+	# bound to what Caddy actually saw on the wire.
+	handle_path /api/signal/* {
+		rewrite * /api{uri}
+		# F-74: signaling responses (offer/answer/stats/room) carry
+		# transient handshake state and an activeRooms count that an
+		# intermediate cache (corporate egress proxy, ISP cache) might
+		# happily serve to the next requester on the same path, building
+		# a room-existence/activity oracle (related to F-43). No-store
+		# also keeps the back-button / bfcache from restoring a stale
+		# answer body. Pragma covers HTTP/1.0 intermediates. Vary on
+		# X-Room-Secret ensures any cache that does retain bytes keys on
+		# the secret rather than just the URL.
+		header Cache-Control "no-store"
+		header Pragma "no-cache"
+		header Vary "Origin, X-Room-Secret"
+		reverse_proxy localhost:3001 {
+			# F-39: strip XFF/X-Real-IP/X-Forwarded-Host before Caddy
+			# re-appends its own values; without this, client-supplied
+			# values would leak to Express via trust proxy: 'loopback'
+			# and forge req.ip past the rate limiter.
+			header_up -X-Forwarded-For
+			header_up -X-Real-IP
+			header_up -X-Forwarded-Host
+			# F-73: the same hygiene applies to the RFC 7239 Forwarded
+			# header and to X-Forwarded-Proto/Port. Express doesn't
+			# parse Forwarded today, but any future middleware
+			# (`forwarded` npm package, app.set('trust proxy', true))
+			# would suddenly honour an attacker-supplied
+			# `Forwarded: for=8.8.8.8` and forge req.ip exactly the
+			# way F-39 was meant to close. Force-set them to Caddy's
+			# view so they cannot smuggle attacker state.
+			header_up -Forwarded
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Port {server_port}
+			# F-144: belt-and-braces fingerprint suppression. The signaling
+			# server already calls app.disable('x-powered-by'); strip the
+			# header at the edge too so any future Express middleware that
+			# re-adds it gets caught before reaching the client.
+			header_down -X-Powered-By
+		}
+	}
+
+	# Local model fallback files: served from whatever host folder the operator
+	# bind-mounted into the container at LOCAL_MODEL_PATH (flat layout — the
+	# ONNX files and vocab.txt are expected directly inside that folder).
+	handle_path /models/* {
+		root * {$LOCAL_MODEL_PATH:/models}
+		# Serve `<file>.zst` with Content-Encoding: zstd when the browser
+		# accepts it, so the browser decompresses natively and nothing in
+		# the app changes. The model weights are application/octet-stream,
+		# which the `encode` directive above deliberately skips, so without
+		# this the full 841 MB int8 encoder crosses the wire uncompressed on
+		# every first load; measured, zstd -9 takes it to 643 MB.
+		#
+		# The sidecars are generated ONCE, offline, by
+		# `node scripts/precompress.mjs --models`. Compressing on the fly would
+		# cost 6-11 s of CPU per download per visitor. A browser that does
+		# not accept zstd, or a file with no sidecar, gets the plain file
+		# exactly as before, so this can only ever help.
+		#
+		# Resume is unaffected: browsers send `Accept-Encoding: identity` on
+		# any request carrying a Range header (verified in Chromium 148), so
+		# a resumed download gets plain byte ranges of the real file.
+		file_server {
+			precompressed zstd
+		}
+	}
+
+	# Dictation regex CSVs (entrypoint populates /var/regex from URL or local folder).
+	handle_path /dictation-regex/* {
+		root * /var/regex
+		file_server
+	}
+
+	# Boost phrase lists (entrypoint populates /var/boost from URL or local folder).
+	handle_path /boost-phrases/* {
+		root * /var/boost
+		file_server
+	}
+
+	# Runtime VITE_* config (entrypoint writes /run/config/config.js).
+	# /srv is read-only at runtime, so config.js is served from a tmpfs path.
+	handle /config.js {
+		root * /run/config
+		file_server
+	}
+
+	# SPA fallback is scoped to actual page routes. Asset-shaped paths
+	# (/assets/*, /ort/*, /js/*, /pcm-recorder-worklet.js, etc.) bypass
+	# the try_files fallback and return a real 404 from file_server if
+	# the file is missing. Without this scoping, a stale-HTML deploy
+	# would serve index.html (Content-Type text/html) under an
+	# /assets/main-OLD.js URL: nosniff blocks execution and the page
+	# silently breaks. More importantly, the fallback used to hide
+	# genuine 404s on legitimate asset paths, masking deploy errors.
+	# Both /srv file_servers below prefer a `<file>.br` sidecar, which the
+	# Docker builder generates with `node scripts/precompress.mjs --static`
+	# right after `vite build`. The bundle is 138 MB, 130 MB of it WASM
+	# (ffmpeg-core 32 MB, four ORT builds, sherpa 18 MB), and `encode` above
+	# re-compresses those on EVERY request. Brotli q11 offline takes the ORT
+	# jsep build from 26 MB to 3.5 MB and ffmpeg-core from 31 MB to 6.9 MB
+	# (measured), at zero per-request CPU. A browser that does not accept
+	# brotli, or a file with no sidecar, falls through to `encode` exactly as
+	# before. The bytes the browser ends up with are identical, so the SRI /
+	# asset-integrity hash checks are unaffected.
+	@asset_path path /assets/* /ort/* /js/* /pcm-recorder-worklet.js
+	handle @asset_path {
+		root * /srv
+		file_server {
+			precompressed br
+		}
+	}
+
+	# SPA + remote-mic.html (Vite emits both as separate entry points).
+	handle {
+		root * /srv
+		try_files {path} {path}/ /index.html
+		file_server {
+			precompressed br
+		}
+	}
+}

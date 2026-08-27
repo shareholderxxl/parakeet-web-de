@@ -1,0 +1,33 @@
+{
+  "name": "parakeet-web-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dev/test harness for parakeet_web (three tiers: unit, http, e2e). Not published.",
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "test": "npm run test:unit && npm run test:http",
+    "test:unit": "node --test --test-reporter=spec 'test/unit/*.test.mjs'",
+    "test:http": "node --test --test-reporter=spec 'test/http/*.test.mjs'",
+    "test:e2e": "playwright test -c test/e2e/playwright.config.js",
+    "test:all": "npm run test && npm run test:e2e",
+    "e2e:models": "node scripts/fetch-e2e-models.mjs",
+    "precompress:static": "node scripts/precompress.mjs --static",
+    "precompress:models": "node scripts/precompress.mjs --models",
+    "fixture:bpe": "python scripts/gen-bpe-fixture.py > test/fixtures/bpe-fixture.json",
+    "fixture:moon": "node scripts/gen-jfk-moon-fixtures.mjs",
+    "transcribe:browser": "node scripts/transcribe-browser.mjs",
+    "probe:check": "node scripts/probe-check.mjs",
+    "webgpu:check": "node scripts/webgpu-check.mjs",
+    "webgpu:memcheck": "node scripts/webgpu-check.mjs --full",
+    "webgpu:check:fp32": "node scripts/webgpu-check.mjs --fp32",
+    "webgpu:memcheck:fp32": "node scripts/webgpu-check.mjs --full --fp32"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "onnxruntime-node": "^1.27.0"
+  },
+  "overrides": {
+    "adm-zip": "^0.6.0"
+  }
+}
