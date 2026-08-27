@@ -18,13 +18,6 @@
         body { background: #1a1a2e; color: #e0e0e0; }
       }
     </style>
-
-    <!-- Eruda mobile devtools: only loaded when ?debug=1 is in the URL.
-         Previously auto-loaded on every Android/iOS visit, which shipped
-         ~200 KB of devtools UI to every mobile user and grew the post-XSS
-         surface unnecessarily. Append ?debug=1 to opt in.
-         Loader is external + SRI-pinned so script-src can stay strict. -->
-    <script src="/js/eruda-loader.js" integrity="sha384-l0N9cG5GS8qbANTxYohWoWDElBgHnAfirhbm0jmWxvt9jbOF6MZNMgfQfkPHkW+J" crossorigin="anonymous"></script>
   </head>
   <body>
     <div id="root"></div>

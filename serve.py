@@ -15,6 +15,8 @@ Start:  python3 serve.py
 import http.server
 import os
 import re
+import ssl
+import subprocess
 import sys
 from pathlib import Path
 
@@ -72,10 +74,32 @@ def main():
     if not DIST.exists():
         print(f"FEHLER: {DIST} fehlt. Bitte zuerst in app/ui 'npm run build' ausführen.")
         sys.exit(1)
-    print(f"parakeet-web-de: http://0.0.0.0:{PORT}/")
+
+    httpd = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+
+    # HTTPS (selbstsigniert): COOP/COEP braucht eine "trusted origin"
+    # (localhost/HTTPS). Ohne HTTPS laufen die crossOriginIsolated-APIs
+    # (SharedArrayBuffer für Worker-Threads) auf http://LAN-IP NICHT.
+    cert = ROOT / "cert.pem"
+    key = ROOT / "key.pem"
+    if not (cert.exists() and key.exists()):
+        subprocess.run(
+            ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", str(key),
+             "-out", str(cert), "-days", "3650", "-nodes", "-subj", "/CN=parakeet-web-de"],
+            check=False, capture_output=True,
+        )
+    if cert.exists() and key.exists():
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(cert, key)
+        httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+        print(f"parakeet-web-de (HTTPS): https://0.0.0.0:{PORT}/")
+    else:
+        print(f"WARNUNG: Kein Zertifikat (openssl fehlt?) - nur HTTP. COOP/COEP greifen NICHT.")
+        print(f"parakeet-web-de (HTTP): http://0.0.0.0:{PORT}/")
+
     print(f"  UI:    {DIST}")
     print(f"  Model: {MODELS} ({'OK' if MODELS.exists() else 'FEHLT - hf download Olicorne/... --local-dir models'})")
-    http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    httpd.serve_forever()
 
 
 if __name__ == "__main__":
