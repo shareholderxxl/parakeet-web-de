@@ -68,6 +68,8 @@ const PROBE_WARMUP_RUNS = 0;
 const PROBE_INIT_TIMEOUT_MS = 0;
 const PROBE_RUN_TIMEOUT_MS = 0;
 const DIAR_PALETTE_SIZE = 8;
+function requestPersistentStorage() { return Promise.resolve(false); }  // (parakeet-web-de: no-op)
+function diarizationModelProtectKeys() { return []; }  // (parakeet-web-de: Diarization entfernt)
 const DEFAULT_DEPTH_SCALING = 1.0;
 const MAX_PHRASE_WEIGHT = 10;
 function packEncoded() { return null; }
