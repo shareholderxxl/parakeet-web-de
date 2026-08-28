@@ -2234,28 +2234,7 @@ export default function App() {
   // between a file and Custom) always read the latest value.
   useEffect(() => { boostCustomTextRef.current = boostCustomText; }, [boostCustomText]);
 
-  // Discover operator-supplied boost lists served at /boost-phrases/. No
-  // manifest (BOOST_PHRASES_SOURCE unset) just means no selector is shown and
-  // the box stays in manual-entry mode.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const manifest = await fetchTextCapped('/boost-phrases/manifest.txt');
-        if (!cancelled && manifest.ok) {
-          const files = manifest.text.trim().split('\n')
-            .map(f => f.trim())
-            .filter(f => f.endsWith('.txt'));
-          setBoostFiles(files);
-        }
-      } catch (e) {
-        console.warn('[Boost] failed to load phrase-list manifest:', e);
-      } finally {
-        if (!cancelled) setBoostFilesLoaded(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // (parakeet-web-de: Boost-Manifest-Discovery entfernt - Phrase-Boosting raus)
 
   // Apply a boost-source selection: fill the textarea from the chosen file, or
   // restore the user's own text for the Custom sentinel. Shared by the selector
