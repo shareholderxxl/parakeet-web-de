@@ -54,3 +54,4 @@ audio_testfiles
 # parakeet-web-de: lokale Modell-Dateien (Download via hf, nicht ins Repo)
 models/
 app/ui/dist/
+models-int4/

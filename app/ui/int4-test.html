@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>int4 Empirie-Test - parakeet-web-de</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1 { font-size: 1.4rem; }
+    .row { margin: 1rem 0; }
+    button { padding: 0.6rem 1.2rem; margin-right: 0.5rem; cursor: pointer; }
+    #log { background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px; padding: 1rem; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; margin-top: 1rem; }
+    #result { margin-top: 1rem; font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+  <h1>int4 Empirie-Test (wasm-Backend)</h1>
+  <p>Lädt <code>encoder-model.int4.onnx</code> (391 MB, int4) + Decoder int8 von <code>/models-int4/</code> und
+  transkribiert <strong>with onnxruntime-web WASM-Backend</strong>. Das ist die offene Frage:
+  unterstützt der WASM-EP int4 (MatMulNBits)?</p>
+
+  <div class="row">
+    <button id="btnLoad">1. int4-Modell laden</button>
+    <span id="loadStatus"></span>
+  </div>
+  <div class="row">
+    <button id="btnRecord">2a. Mikrofon-Aufnahme (3 s) sprechen</button>
+    <button id="btnStop" disabled>Stop</button>
+    <span id="recStatus"></span>
+  </div>
+  <div class="row">
+    2b. <input type="file" id="fileInput" accept="audio/*,.wav">
+  </div>
+  <div id="result"></div>
+  <div id="log"></div>
+
+  <script type="module" src="/src/int4-test.js"></script>
+</body>
+</html>
