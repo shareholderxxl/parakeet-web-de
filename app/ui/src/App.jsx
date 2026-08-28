@@ -2992,30 +2992,8 @@ export default function App() {
   // the same pcmChunksRef both record paths feed; safe to call once per
   // recording session. The canonical stop-pass still runs on stop.
   function maybeStartLiveTranscriber(audioCtx) {
-    if (!liveTranscriptionEnabledRef.current) return;
-    if (!modelRef.current) return;
-    if (liveTranscriberRef.current) return;
-    // A capture can now start while another transcription is running (it gets
-    // queued on stop), but the live pass shares the single ORT session with the
-    // batch path, and concurrent invocations either queue silently or race on
-    // the encoder's intermediate tensors and emit garbage (F-82). A recording
-    // started mid-transcription therefore runs WITHOUT the live preview; the
-    // final batch pass is unaffected.
-    if (isTranscribingRef.current) return;
-    setLiveTranscript({ text: '', words: [] });
-    setLiveStats(null);
-    const winSetting = liveContextWindowRef.current;
-    const live = createLiveTranscriber({
-      model: modelRef.current,
-      getPcmChunks: () => pcmChunksRef.current,
-      getSampleRate: () => audioCtx?.sampleRate || 48000,
-      windowMode: winSetting === 'auto' ? 'auto' : Number(winSetting),
-      getPhraseBoost: () => phraseBoostRef.current,
-      onUpdate: ({ text, words }) => setLiveTranscript({ text, words }),
-      onStats: setLiveStats,
-    });
-    liveTranscriberRef.current = live;
-    live.start();
+    // (parakeet-web-de: Live-Transcription entfernt - no-op)
+    return;
   }
 
   async function stopLiveTranscriberIfRunning() {
@@ -5289,50 +5267,11 @@ export default function App() {
                   }}
                   style={{ width: '5rem' }}
                 />
-              </div>
-            )}
+               </div>
+             )}
+           </CollapsibleSection>
 
-            <div className="setting-row">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={liveTranscriptionEnabled}
-                  onChange={e => setLiveTranscriptionEnabled(e.target.checked)}
-                  disabled={isRecording}
-                />
-                {t('liveTranscription')}
-                <InfoTooltip text={t('tooltipLiveTranscription')} />
-              </label>
-              {liveTranscriptionEnabled && (
-                <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <span className="setting-label">
-                    {t('liveContextWindow')}:
-                    <InfoTooltip text={t('tooltipLiveContextWindow')} />
-                  </span>
-                  <select
-                    value={liveContextWindow}
-                    onChange={e => setLiveContextWindow(e.target.value)}
-                    disabled={isRecording}
-                  >
-                    <option value="auto">{t('liveContextAuto')}</option>
-                    <option value="10">10s</option>
-                    <option value="15">15s</option>
-                    <option value="20">20s</option>
-                    <option value="30">30s</option>
-                    <option value="45">45s</option>
-                    <option value="60">60s</option>
-                  </select>
-                </div>
-              )}
-              {liveTranscriptionEnabled && (
-                <p style={{ fontSize: '0.8rem', opacity: 0.7, margin: '0.25rem 0 0' }}>
-                  {t('liveStreamingNote')}
-                </p>
-              )}
-            </div>
-          </CollapsibleSection>
-
-          {/* (parakeet-web-de: boosting-Sektion entfernt) */}
+           {/* (parakeet-web-de: boosting-Sektion entfernt) */}
 
           <CollapsibleSection id="engine" title={t('settingsGroupEngine')} open={!!sectionsOpen.engine} onToggle={toggleSection}>
             <p style={{ marginTop: 0 }}>
