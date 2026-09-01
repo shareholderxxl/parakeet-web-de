@@ -1,4 +1,4 @@
-# Parakeet Web DE
+# portabletranscribe
 
 Lokale Sprach-zu-Text-Transkription im Browser — **alles läuft clientseitig**,
 kein einziges Audio-Sample verlässt dein Gerät. Basierend auf
