@@ -303,14 +303,14 @@ export default function App() {
       const progress = () => {};
       const modelUrls = await getParakeetModel(repoId, {
         encoderQuant: 'int4', decoderQuant: 'int8', preprocessor: 'js',
-        backend: 'wasm', cpuThreads, progress,
+        backend: 'wasm', cpuThreads: Number(cpuThreads), progress,
         localFallbackBaseUrl: '/models',
         ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
       });
       const nMels = modelUrls.modelConfig?.featuresSize || 80;
       modelRef.current = await ParakeetModel.fromUrls({
         ...modelUrls.urls, filenames: modelUrls.filenames, backend: 'wasm',
-        cpuThreads, preprocessorBackend: modelUrls.preprocessorBackend, nMels,
+        cpuThreads: Number(cpuThreads), preprocessorBackend: modelUrls.preprocessorBackend, nMels,
       });
       setStatus('ready'); setCanRecord(true);
     } catch (e) {
@@ -360,8 +360,8 @@ export default function App() {
       const audio16 = await resamplePcmTo16k(pcm, nativeRate);
       const dur = audio16.length / 16000;
       const res = await modelRef.current.transcribeChunked(audio16, 16000, {
-        enableChunking, chunkDurationSec: chunkDuration, overlapSec: 2,
-        returnTimestamps: true, temperature: 0, beamWidth, frameStride: 8, enableProfiling: false,
+        enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
+        returnTimestamps: true, temperature: 0, beamWidth: Number(beamWidth), frameStride: 8, enableProfiling: false,
       });
       let text = res.utterance_text || '';
       const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length };
