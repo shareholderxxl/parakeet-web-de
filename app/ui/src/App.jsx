@@ -256,7 +256,7 @@ export default function App() {
     const q = new Quill(editorEl.current, {
       theme: 'snow',
       placeholder: tr('aboutDesc').includes('lokale') ? 'Text diktieren oder tippen…' : 'Dictate or type…',
-      modules: { toolbar: [['bold', 'italic', 'underline'], { list: 'ordered' }, { list: 'bullet' }, 'clean'] },
+      modules: { toolbar: [['bold', 'italic', 'underline', 'clean'], [{ list: 'ordered' }, { list: 'bullet' }]] },
     });
     quillRef.current = q;
     return () => {};
