@@ -139,10 +139,6 @@ const STR = {
   },
 };
 
-const MODELS = [
-  { value: 'de', flag: '🇩🇪' }, { value: 'en', flag: '🇬🇧' }, { value: 'auto', flag: '🌐' },
-];
-
 export default function App() {
   const { lang, setLang } = useI18n();
   const tr = useCallback((k) => (STR[lang] && STR[lang][k]) || STR.en[k] || k, [lang]);
@@ -428,9 +424,6 @@ export default function App() {
               ) : (
                 <button className="pt-btn stop" onClick={stopAndTranscribe}>■ {tr('stop')}</button>
               )}
-              <span className="pt-lang"><select value={transcriptionLanguage} onChange={e => setTranscriptionLanguage(e.target.value)} aria-label={tr('langLabel')} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}>
-                {MODELS.map(m => <option key={m.value} value={m.value}>{m.flag}</option>)}
-              </select></span>
             </div>
           </section>
         )}
@@ -461,10 +454,6 @@ export default function App() {
         {view === 'settings' && (
           <section className="pt-settings">
             <h2>{tr('navSettings')}</h2>
-            <label className="pt-row"><span>{tr('langLabel')}</span>
-              <select value={transcriptionLanguage} onChange={e => setTranscriptionLanguage(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}>
-                <option value="de">Deutsch</option><option value="en">English</option><option value="auto">Auto</option>
-              </select></label>
             <label className="pt-row"><span>{tr('dictationOn')}</span><input type="checkbox" checked={dictationEnabled} onChange={e => setDictationEnabled(e.target.checked)} /></label>
             <label className="pt-row"><span>{tr('persistLabel')}</span><input type="checkbox" checked={persistTranscripts} onChange={e => setPersistTranscripts(e.target.checked)} /></label>
             <label className="pt-row"><span>{tr('autoCopyLabel')}</span><input type="checkbox" checked={autoCopy} onChange={e => setAutoCopy(e.target.checked)} /></label>
