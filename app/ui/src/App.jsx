@@ -303,7 +303,7 @@ export default function App() {
         localFallbackBaseUrl: '/models',
         ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
       });
-      const nMels = modelUrls.modelConfig?.featuresSize || 80;
+      const nMels = modelUrls.modelConfig?.featuresSize || 128;
       modelRef.current = await ParakeetModel.fromUrls({
         ...modelUrls.urls, filenames: modelUrls.filenames, backend: 'wasm',
         cpuThreads: Number(cpuThreads), preprocessorBackend: modelUrls.preprocessorBackend, nMels,
