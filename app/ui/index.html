@@ -1,22 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ParakeetWeb</title>
+    <title>portabletranscribe</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#1a1a2e" />
+    <meta name="theme-color" content="#f5f6fb" />
+    <script>
+      // Theme vor dem ersten Paint setzen (kein Flash-of-wrong-theme), Default hell.
+      try {
+        var t = localStorage.getItem('portabletranscribe_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.style.colorScheme = t;
+      } catch (e) {}
+    </script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html[data-theme="light"] { color-scheme: light; }
+      html[data-theme="dark"] { color-scheme: dark; }
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: #f6f7fb;
-        color: #111827;
         min-height: 100vh;
       }
-      @media (prefers-color-scheme: dark) {
-        body { background: #1a1a2e; color: #e0e0e0; }
-      }
+      body { background: #f5f6fb; color: #1a1f36; }
+      html[data-theme="dark"] body { background: #0d1124; color: #ecedf5; }
     </style>
   </head>
   <body>
@@ -24,4 +31,5 @@
     <script src="/config.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
-</html> 
+</html>
+

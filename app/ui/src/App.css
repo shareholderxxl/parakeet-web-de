@@ -1,1554 +1,177 @@
-/* ─── Design tokens ───────────────────────────────────────────────────────── */
+/* ─── Design tokens · Hell (Default) ─── */
 :root {
-  /* Light theme — refreshed with red accent to match WebSend identity */
-  --bg-page:          #f5f6fb;
-  --bg-card:          #ffffff;
-  --bg-card-elevated: #ffffff;
-  --bg-subtle:        #f3f4f9;
-
-  --border:           #e5e7eb;
-  --border-strong:    #d1d5db;
-
-  --text:             #1a1f36;
-  --text-muted:       #3b4256;
-  --text-subtle:      #6b7280;
-
-  --accent:           #e63956;
-  --accent-hover:     #d62a48;
-  --accent-soft-bg:   #fff1f4;
-  --accent-soft-text: #b81f3a;
-  --accent-soft-border: #ffd1d9;
-  --accent-glow:      rgba(230, 57, 86, 0.25);
-
-  --success:          #10b981;
-  --success-soft-bg:  #ecfdf5;
-  --success-soft-border: #d1fae5;
-
-  --warning:          #f59e0b;
-  --warning-soft-bg:  #fef3c7;
-  --warning-soft-border: #fcd34d;
-  --warning-soft-text: #92400e;
-
-  --danger:           #ef4444;
-  --danger-hover:     #dc2626;
-  --danger-soft-bg:   #fef2f2;
-
-  --info-soft-bg:     #eef2ff;
-  --info-soft-border: #c7d2fe;
-  --info-soft-text:   #3730a3;
-
-  --radius-sm:        8px;
-  --radius-md:        12px;
-  --radius-lg:        16px;
-  --radius-xl:        22px;
-  --radius-full:      9999px;
-
-  --shadow-sm:        0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
-  --shadow-md:        0 8px 24px rgba(0,0,0,.08);
-  --shadow-glow:      0 0 0 1px var(--accent-glow), 0 8px 28px var(--accent-glow);
-
-  --font:             -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg-page: #f5f6fb;
+  --bg-card: #ffffff;
+  --bg-subtle: #f3f4f9;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --text: #1a1f36;
+  --text-muted: #3b4256;
+  --text-subtle: #6b7280;
+  --accent: #e63956;
+  --accent-hover: #d62a48;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 8px 24px rgba(0,0,0,.08);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+}
+/* ─── Dunkel ─── */
+html[data-theme="dark"] {
+  --bg-page: #0d1124;
+  --bg-card: #161b34;
+  --bg-subtle: #1a1f3a;
+  --border: #2a3057;
+  --border-strong: #3a4170;
+  --text: #ecedf5;
+  --text-muted: #c4c8de;
+  --text-subtle: #8d93b3;
+  --accent: #ff4d6d;
+  --accent-hover: #ff5f7c;
+  --shadow: 0 10px 30px rgba(0,0,0,.5);
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* WebSend-inspired deep-navy palette with red accent */
-    --bg-page:          #0d1124;
-    --bg-card:          #161b34;
-    --bg-card-elevated: #1d2342;
-    --bg-subtle:        #1a1f3a;
+*, *::before, *::after { box-sizing: border-box; }
+body { font-family: var(--font); color: var(--text); background: var(--bg-page); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    --border:           #2a3057;
-    --border-strong:    #3a4170;
-
-    --text:             #ecedf5;
-    --text-muted:       #c4c8de;
-    --text-subtle:      #8d93b3;
-
-    --accent:           #e63956;
-    --accent-hover:     #ff4d6d;
-    --accent-soft-bg:   rgba(230,57,86,.10);
-    --accent-soft-text: #ff8597;
-    --accent-soft-border: rgba(230,57,86,.35);
-    --accent-glow:      rgba(230, 57, 86, 0.35);
-
-    --success:          #10b981;
-    --success-soft-bg:  rgba(16,185,129,.1);
-    --success-soft-border: rgba(16,185,129,.3);
-
-    --warning:          #f59e0b;
-    --warning-soft-bg:  rgba(245,158,11,.1);
-    --warning-soft-border: rgba(245,158,11,.3);
-    --warning-soft-text: #fcd34d;
-
-    --danger:           #ef4444;
-    --danger-hover:     #f87171;
-    --danger-soft-bg:   rgba(239,68,68,.12);
-
-    --info-soft-bg:     rgba(99,102,241,.10);
-    --info-soft-border: rgba(99,102,241,.30);
-    --info-soft-text:   #a5b4fc;
-
-    --shadow-sm:        0 1px 3px rgba(0,0,0,.5);
-    --shadow-md:        0 10px 30px rgba(0,0,0,.5);
-    --shadow-glow:      0 0 0 1px var(--accent-glow), 0 10px 36px var(--accent-glow);
-  }
-}
-
-/* ─── Base ────────────────────────────────────────────────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
-body {
-  font-family: var(--font);
-  line-height: 1.4;
-  color: var(--text);
-  background: var(--bg-page);
-  margin: 0;
+/* ─── App-Shell: linke Navigation + Inhalt ─── */
+.pt-app {
+  display: grid;
+  grid-template-columns: 210px 1fr;
   min-height: 100vh;
 }
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(230,57,86,0.12), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 90% 110%, rgba(99,102,241,0.10), transparent 60%),
-      var(--bg-page);
-    background-attachment: fixed;
-  }
-}
-
-/* ─── App shell ───────────────────────────────────────────────────────────── */
-.app {
-  max-width: 760px;
-  margin: 2rem auto;
+.pt-nav {
   background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  padding: 1.75rem 2rem;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border);
-}
-
-.app-header {
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  margin-bottom: 1.5rem;
-  gap: 0.35rem;
-}
-
-.app-header__title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.app-header__title-row h2 {
-  flex: 1;
-  margin: 0;
-}
-
-/* Status line. Lives under the capture buttons (or under Load Model before the
-   model is up), directly above the chunk progress bar, not in the header. */
-.app-status {
-  margin: 0.5rem 0 0;
-  text-align: center;
-  font-size: 0.9rem;
-  color: var(--text-subtle);
-}
-
-/* Secondary note appended to the status line (e.g. boost-list rebuild). */
-.app-status__note {
-  margin-left: 0.6rem;
-  font-style: italic;
-  opacity: 0.85;
-}
-
-.app-header h2 {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--accent);
-}
-
-.app-logo {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-}
-
-/* ─── Settings toggle button ─────────────────────────────────────────────── */
-.settings-toggle {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 1.8rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s, border-color 0.2s, transform 0.15s;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.settings-toggle:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  transform: scale(1.05);
-}
-
-.settings-toggle:active {
-  background: var(--border);
-}
-
-/* ─── Info panel ─────────────────────────────────────────────────────────── */
-.info-section {
-  margin-bottom: 1.5rem;
-  padding: 1.25rem;
-  background: var(--accent-soft-bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--accent-soft-border);
-}
-
-.info-section h3 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.1rem;
-  color: var(--accent-soft-text);
-}
-
-.info-section p {
-  margin: 0 0 0.75rem 0;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-
-.info-section p:last-child { margin-bottom: 0; }
-
-.info-section a { text-decoration: underline; color: var(--accent); }
-
-.info-section a:hover { color: var(--accent-hover); }
-
-/* Sidebar (settings) links, e.g. the model / HuggingFace repo link. Without
-   this they fall back to the browser default blue, which is hard to read on the
-   dark theme's background. --accent is theme-aware (readable in light + dark). */
-.settings-group-body a { text-decoration: underline; color: var(--accent); }
-
-.settings-group-body a:hover { color: var(--accent-hover); }
-
-/* ─── Controls row ───────────────────────────────────────────────────────── */
-.controls {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.controls label {
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.controls select,
-.controls input[type="number"] {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-card);
-  color: var(--text);
-}
-
-/* ─── Settings sidebar ───────────────────────────────────────────────────── */
-.settings-sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
-  animation: fadeIn 0.25s ease-out;
-}
-
-.settings-sidebar {
-  position: fixed;
+  gap: 4px;
+  position: sticky;
   top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(400px, 85vw);
-  background: var(--bg-card);
-  border-left: 1px solid var(--border);
-  border-top-left-radius: var(--radius-xl);
-  border-bottom-left-radius: var(--radius-xl);
-  z-index: 1001;
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
-  overflow-y: auto;
-  padding: 1.75rem 1.5rem;
-  animation: slideInRight 0.3s ease-out;
-}
-
-.settings-sidebar-close {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: background 0.2s, border-color 0.2s;
-  color: var(--text-subtle);
-}
-
-.settings-sidebar-close:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-muted);
-}
-
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.settings-section {
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
-  border: none;
-}
-
-/* Drawer model header (the <p> right under the close button) */
-.settings-section > p:first-of-type {
-  margin: 0.25rem 0 1.5rem;
-  padding: 0.85rem 1rem;
-  background: var(--accent-soft-bg);
-  border: 1px solid var(--accent-soft-border);
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
-  color: var(--text-muted);
-}
-
-.settings-section > p:first-of-type strong {
-  color: var(--accent-soft-text);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 0.7rem;
-  display: block;
-  margin-bottom: 0.2rem;
-}
-
-.setting-row {
-  margin: 0;
-  padding: 0.85rem 0;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--border);
-}
-
-.setting-row:last-child { border-bottom: none; }
-
-.setting-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-  white-space: nowrap;
-}
-
-/* Small parenthetical after a setting label, e.g. the beam width "(auto)"
-   marker shown while the width is still coupled to the boost state. */
-.setting-hint {
-  font-weight: 400;
-  text-transform: none;
-  color: var(--text-muted);
-}
-
-.setting-options {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.setting-options label {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.setting-options label.disabled-option {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Benchmark section results table (sidebar). Compact on purpose: it sits in a
-   narrow panel and has to stay readable with four columns. */
-.benchmark-results {
-  width: 100%;
-  margin-top: 0.6rem;
-  border-collapse: collapse;
-  font-size: 0.75rem;
-}
-
-.benchmark-results th,
-.benchmark-results td {
-  text-align: left;
-  padding: 0.2rem 0.3rem;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.benchmark-results th {
-  color: var(--text-subtle);
-  font-weight: 600;
-}
-
-.settings-content {
-  margin-top: 1rem;
-}
-
-.settings-group-header {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-  padding: 1.25rem 0 0.4rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0.25rem;
-}
-
-/* Collapsible settings group (header button + unmounting body). */
-.settings-group {
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-group-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.9rem 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  cursor: pointer;
-  color: var(--text-subtle);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-align: left;
-  transition: color 0.2s;
-}
-
-.settings-group-toggle:hover {
-  color: var(--accent-soft-text, var(--text));
-}
-
-.settings-group-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-.settings-group-chevron {
-  display: inline-block;
-  width: 1em;
-  flex: 0 0 auto;
-  font-size: 0.85rem;
-}
-
-.settings-group-title {
-  flex: 1 1 auto;
-}
-
-/* The body's first row already sits under the toggle, so drop its top
-   padding and the redundant divider; the group wrapper owns the bottom rule. */
-.settings-group-body {
-  padding-bottom: 0.5rem;
-}
-
-.settings-group-body > .setting-row:first-child {
-  padding-top: 0.25rem;
-}
-
-.settings-group-body > .setting-row:last-child {
-  border-bottom: none;
-}
-
-/* Drawer footer action buttons — restyle .primary inside the drawer
-   as full-width list-row items (à la WebSend's About / Production-mode rows),
-   overriding the global .primary look without changing JSX. Higher
-   specificity (.settings-section > button.primary) beats button.primary
-   without !important, so inline styles (e.g. the red Reset button)
-   still win where intended. */
-.settings-section > button.primary,
-.settings-section > .setting-row > button.primary {
-  width: 100%;
-  text-align: left;
-  padding: 0.85rem 1rem;
-  margin-top: 0.5rem;
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  font-weight: 500;
-  box-shadow: none;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-
-.settings-section > button.primary:hover:not(:disabled),
-.settings-section > .setting-row > button.primary:hover:not(:disabled) {
-  background: var(--accent-soft-bg);
-  border-color: var(--accent-soft-border);
-  color: var(--accent-soft-text);
-}
-
-.settings-section > button.primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ─── Generic primary button (legacy — used in a few places) ─────────────── */
-button.primary {
-  padding: 0.4rem 0.9rem;
-  background: var(--accent);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.2s;
-}
-
-button.primary:hover  { background: var(--accent-hover); }
-button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ─── Record / file-upload buttons ──────────────────────────────────────── */
-.record-button {
-  padding: 0.95rem 1.25rem !important;
-  font-size: 1.1rem !important;
-  font-weight: 600;
-  min-width: 0;
-  border-radius: var(--radius-lg) !important;
-  box-shadow: var(--shadow-glow);
-  transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
-}
-
-.record-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  filter: brightness(1.05);
-}
-
-.file-upload-button {
-  display: inline-block;
-  padding: 0.95rem 1.5rem;
-  background: var(--accent);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-size: 1.1rem;
-  font-weight: 600;
-  text-align: center;
-  transition: background 0.2s, transform 0.2s, box-shadow 0.2s, filter 0.2s;
-  box-shadow: var(--shadow-glow);
-  min-width: 0;
-}
-
-.file-upload-button:hover {
-  background: var(--accent-hover);
-  transform: translateY(-2px);
-  filter: brightness(1.05);
-}
-
-/* ─── Status / progress ──────────────────────────────────────────────────── */
-.status {
-  margin-top: 0.5rem;
-  font-weight: 500;
-}
-
-.progress-wrapper { margin: 0.5rem 0; }
-
-.progress-bar {
-  height: 8px;
-  background: var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.progress-bar > div {
-  height: 100%;
-  background: var(--success);
-  transition: width 0.2s;
-}
-
-.progress-text {
-  font-size: 0.8rem;
-  color: var(--text-subtle);
-  margin-top: 0.25rem;
-}
-
-/* ─── Fallback model prompt ──────────────────────────────────────────────── */
-.fallback-prompt {
-  background: var(--warning-soft-bg);
-  border: 1px solid var(--warning-soft-border);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 1rem;
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-  color: var(--warning-soft-text);
-}
-
-.fallback-prompt p { margin: 0 0 0.5rem 0; }
-
-.fallback-actions { display: flex; gap: 0.5rem; }
-
-.fallback-actions button {
-  padding: 0.4rem 0.8rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--warning);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.fallback-actions button:first-child {
-  background: var(--warning);
-  color: white;
-}
-
-.fallback-actions button:last-child {
-  background: transparent;
-  color: var(--warning-soft-text);
-}
-
-/* ─── Textarea + copy button ─────────────────────────────────────────────── */
-.textarea-container { position: relative; }
-
-.textarea {
-  width: 100%;
-  height: 6rem;
-  resize: vertical;
-  padding-right: 3rem;
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-
-.copy-button {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-subtle);
-  font-size: 1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: opacity 0.2s, transform 0.1s, background 0.2s;
-}
-
-.copy-button:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-muted);
-  transform: scale(1.05);
-}
-
-.copy-button:active  { transform: scale(0.95); }
-.copy-button:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.copy-button-small { width: 28px; height: 28px; font-size: 0.9rem; }
-
-/* ─── Performance readout ────────────────────────────────────────────────── */
-.performance {
-  font-size: 0.85rem;
-  background: var(--success-soft-bg);
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--success-soft-border);
-  margin-bottom: 1rem;
-}
-
-/* ─── History list ───────────────────────────────────────────────────────── */
-.history {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  margin-bottom: 1rem;
-}
-
-.history-item {
-  padding: 1rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
-}
-
-.history-item:last-child { border-bottom: none; }
-
-.history-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.9rem;
-  color: var(--text-subtle);
-  margin-bottom: 0.5rem;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.history-stats {
-  font-size: 0.75rem;
-  color: var(--text-subtle);
-  margin-bottom: 0.5rem;
-}
-
-.history-text-container { position: relative; }
-
-/* Per-entry control row: [Audio][Raw][Dictation] on the left, the
-   always-visible kebab on the right. */
-.history-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.history-modes {
-  display: flex;
-  gap: 0.25rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* Inline audio player + Transcribe again, shown when the Audio toggle is on. */
-.history-audio {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.history-text {
-  background: var(--bg-subtle);
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  font-size: 0.9rem;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-}
-
-/* ─── Kebab menu ─────────────────────────────────────────────────────────── */
-/* Lives in the per-entry control row (flex), so position relative for the
-   absolutely-positioned dropdown. Always visible (no hover gate) for
-   discoverability. */
-.kebab-menu-wrapper {
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.kebab-button {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.2rem 0.5rem;
-  color: var(--text-subtle);
-  transition: color 0.15s, background 0.15s;
-}
-
-.kebab-button:hover {
-  color: var(--text);
-  background: var(--border);
-}
-
-.kebab-dropdown {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  background: var(--bg-card-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  z-index: 20;
-  min-width: 170px;
-  overflow: hidden;
-}
-
-/* Read-only info line (e.g. the RTF) at the top of the kebab dropdown. */
-.kebab-info {
-  padding: 0.45rem 0.75rem;
-  font-size: 0.8rem;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  border-bottom: 1px solid var(--border);
-  cursor: default;
-}
-
-.kebab-dropdown button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  border: none;
-  background: none;
-  font-size: 0.85rem;
-  cursor: pointer;
-  white-space: nowrap;
-  color: var(--text-muted);
-}
-
-.kebab-dropdown button:hover:not(:disabled) { background: var(--bg-subtle); }
-.kebab-dropdown button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.kebab-dropdown .kebab-delete:hover {
-  background: var(--danger-soft-bg);
-  color: var(--danger);
-}
-
-/* Per-entry speaker-count control inside the kebab dropdown. */
-.kebab-speakers {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  border-top: 1px solid var(--border);
-}
-.kebab-speakers select {
-  padding: 0.15rem 0.35rem;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text);
-}
-
-/* ─── Help tooltip ───────────────────────────────────────────────────────── */
-.info-help {
-  position: relative;
-  display: inline-block;
-  margin-left: 0.4rem;
-  vertical-align: middle;
-}
-
-.info-help-button {
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-full);
-  border: 1.5px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-subtle);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-
-.info-help-button:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.info-help-text {
-  /* Position is computed in JS (see InfoTooltip in App.jsx) and applied
-     inline via style.left/top/width so the popup can overlay sibling
-     containers (e.g. the settings sidebar) without being clipped by
-     their overflow, and is always clamped within the viewport.
-     The width below matches the JS clamp so the hidden first frame
-     already has a sane width even when the popup's in-flow ancestor
-     (an inline-block inside a narrow flex label) is much narrower. */
-  position: fixed;
-  z-index: 2100;
-  background: var(--bg-card-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 2rem 0.75rem 0.75rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  letter-spacing: normal;
-  text-transform: none;
-  font-weight: 400;
-  color: var(--text-muted);
-  box-shadow: var(--shadow-md);
-  width: min(320px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
-  overflow-y: auto;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-  animation: fadeIn 0.15s ease-out;
-}
-
-.info-help-close {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  background: transparent;
-  border: none;
-  font-size: 1.25rem;
-  line-height: 1;
-  color: var(--text-subtle);
-  cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  transition: background 0.2s, color 0.2s;
-}
-
-.info-help-close:hover {
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-}
-
-/* ─── Audio player (inline, per transcript entry) ────────────────────────── */
-.audio-player { flex: 1; height: 40px; }
-
-.display-mode-button {
-  padding: 0.3rem 0.6rem;
-  background: var(--bg-card);
-  color: var(--text-subtle);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.display-mode-button:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-}
-
-.display-mode-button.active {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
-}
-
-/* Greyed-out "Speakers" button when the diarization models failed to load.
-   Looks disabled but keeps pointer events ON (no native `disabled`) so the
-   title tooltip explaining the reason still shows on hover. */
-.display-mode-button--unavailable,
-.display-mode-button--unavailable:hover {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--bg-card);
-  color: var(--text-subtle);
-  border-color: var(--border-strong);
-}
-
-/* Cancel button shown next to "Speakers" while a diarization is running in its
-   worker (the main thread stays free, so this stays clickable). */
-.display-mode-button--cancel {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.display-mode-button--cancel:hover {
-  background: var(--danger-soft-bg);
-  border-color: var(--danger-hover);
-  color: var(--danger-hover);
-}
-
-/* ─── History fade-in animation ──────────────────────────────────────────── */
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.history-item-enter { animation: fadeSlideIn 0.4s ease-out; }
-
-/* ─── Button component ───────────────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-family: var(--font);
-  font-size: 0.95rem;
-  font-weight: 500;
-  padding: 0.55rem 1.1rem;
-  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
-  white-space: nowrap;
-  line-height: 1.2;
-}
-
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
-
-.btn--primary {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 4px 14px var(--accent-glow);
-}
-.btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px var(--accent-glow);
-}
-
-.btn--danger {
-  background: var(--danger);
-  color: #fff;
-}
-.btn--danger:hover:not(:disabled) { background: var(--danger-hover); transform: translateY(-1px); }
-
-.btn--success {
-  background: var(--success);
-  color: #fff;
-}
-
-.btn--ghost {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-.btn--ghost:hover:not(:disabled) { background: var(--bg-subtle); border-color: var(--border-strong); }
-
-.btn--icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-full);
-  padding: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 1.2rem;
-}
-.btn--icon:hover:not(:disabled) { background: var(--bg-subtle); border-color: var(--border-strong); }
-
-/* ─── Card component ─────────────────────────────────────────────────────── */
-.card {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  padding: 1.25rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.card--info {
-  background: var(--accent-soft-bg);
-  border-color: var(--accent-soft-border);
-}
-
-.card--warning {
-  background: var(--warning-soft-bg);
-  border-color: var(--warning-soft-border);
-}
-
-.card--success {
-  background: var(--success-soft-bg);
-  border-color: var(--success-soft-border);
-}
-
-/* ─── Banner component ───────────────────────────────────────────────────── */
-.banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 1rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.banner--info {
-  background: var(--accent-soft-bg);
-  border-color: var(--accent-soft-border);
-  color: var(--accent-soft-text);
-}
-
-.banner--warning {
-  background: var(--warning-soft-bg);
-  border-color: var(--warning-soft-border);
-  color: var(--warning-soft-text);
-}
-
-.banner--danger {
-  background: var(--danger-soft-bg);
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.banner--success {
-  background: var(--success-soft-bg);
-  border-color: var(--success-soft-border);
-  color: var(--success);
-}
-
-/* ─── Modal / overlay component ──────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.modal-panel {
-  background: var(--bg-card-elevated);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-  padding: 2rem;
-  max-width: 420px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-  animation: slideDown 0.25s ease-out;
-}
-
-/* About dialog has several paragraphs of prose; 420px reads as a
-   cramped column on desktop. Give it more breathing room. */
-.modal-panel--about {
-  max-width: 640px;
-}
-
-.modal-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--text-subtle);
-  font-size: 1.25rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.2rem 0.5rem;
-  transition: background 0.2s, color 0.2s;
-}
-
-.modal-close:hover {
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-}
-
-/* ─── Focus ring ─────────────────────────────────────────────────────────── */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ─── Language flag picker ──────────────────────────────────────────────── */
-.language-switcher {
-  display: inline-flex;
-  gap: 0.4rem;
-}
-
-.language-flag {
-  width: 40px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s, background 0.15s;
-  filter: grayscale(0.55) opacity(0.7);
-}
-
-.language-flag:hover {
-  filter: none;
-  transform: translateY(-1px);
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-}
-
-.language-flag--active {
-  border-color: var(--accent);
-  background: var(--accent-soft-bg);
-  box-shadow: 0 0 0 2px var(--accent-glow);
-  filter: none;
-}
-
-.language-flag__emoji {
-  font-size: 1.2rem;
-  line-height: 1;
-}
-
-.setting-row--language {
-  justify-content: space-between;
-}
-
-/* ─── Sidebar checkboxes / radios ───────────────────────────────────────── */
-.settings-sidebar input[type="checkbox"],
-.settings-sidebar input[type="radio"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  margin: 0 0.5rem 0 0;
-  border: 1.5px solid var(--border-strong);
-  background: var(--bg-card);
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-  vertical-align: middle;
-}
-
-.settings-sidebar input[type="checkbox"] {
-  border-radius: 5px;
-}
-
-.settings-sidebar input[type="radio"] {
-  border-radius: 50%;
-}
-
-.settings-sidebar input[type="checkbox"]:hover:not(:disabled),
-.settings-sidebar input[type="radio"]:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.settings-sidebar input[type="checkbox"]:checked,
-.settings-sidebar input[type="radio"]:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.settings-sidebar input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 1px;
-  width: 5px;
-  height: 10px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.settings-sidebar input[type="radio"]:checked::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.settings-sidebar input[type="checkbox"]:focus-visible,
-.settings-sidebar input[type="radio"]:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-.settings-sidebar input[type="checkbox"]:disabled,
-.settings-sidebar input[type="radio"]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.settings-sidebar label {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
-
-/* ─── Spinner: rotating ring for active operations (model load, transcription, preview decode) ── */
-.spinner {
-  display: inline-block;
-  width: 0.95em;
-  height: 0.95em;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spinner-spin 0.7s linear infinite;
-  vertical-align: -0.18em;
-  flex-shrink: 0;
-}
-
-.spinner--inline {
-  margin-right: 0.45em;
-}
-
-/* Inline diarization progress percentage shown inside the Speakers button
-   while a piecewise run is in flight. Tabular numerals keep the button width
-   steady as the value climbs. */
-.diar-progress {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
-}
-
-@keyframes spinner-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* While a WebGPU transcription runs, EVERY CSS animation on the page is
-   paused (App.jsx toggles this class around runTranscription). Continuous
-   compositor frame production gates WebGPU callback delivery process-wide
-   (main thread AND workers), so an infinite animation like the spinner taxes
-   every JSEP yield inside session.run and slowed the fp32 encoder ~50x
-   (measured 2026-08-11). Discrete updates (progress bar, status text,
-   transitions) only produce a frame per change and are harmless. */
-html.gpu-run *,
-html.gpu-run *::before,
-html.gpu-run *::after {
-  animation-play-state: paused !important;
-}
-
-/* Listening dots: softer indicator used while live transcription is streaming.
-   Deliberately STATIC (a rising-opacity ellipsis, no keyframes): live decoding
-   runs WebGPU session.runs too, and any continuous animation would gate their
-   callback delivery exactly like the spinner did (see the html.gpu-run note
-   above). The live path has no gpu-run toggle, so the indicator itself must
-   not produce frames. */
-.live-dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-  vertical-align: -0.05em;
-  line-height: 1;
-}
-
-.live-dots > span {
-  display: inline-block;
-  width: 0.42em;
-  height: 0.42em;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.3;
-}
-
-.live-dots > span:nth-child(2) { opacity: 0.6; }
-.live-dots > span:nth-child(3) { opacity: 0.95; }
-
+  height: 100vh;
+}
+.pt-brand {
+  font-weight: 700; font-size: 1rem; padding: 6px 10px 18px;
+  color: var(--text); text-wrap: balance;
+}
+.pt-navlink {
+  display: block; padding: 11px 12px; border-radius: var(--radius-sm);
+  color: var(--text-muted); text-decoration: none; font-size: .95rem;
+  transition: background-color .15s, color .15s;
+}
+.pt-navlink:hover { background: var(--bg-subtle); }
+.pt-navlink.active { background: var(--accent); color: #fff; }
+.pt-navfoot { margin-top: auto; display: flex; gap: 8px; }
+.pt-theme {
+  width: 100%; padding: 10px; border-radius: var(--radius-sm); font-size: 1.15rem;
+  border: 1px solid var(--border); background: var(--bg-subtle); color: var(--text);
+  cursor: pointer; transition: border-color .15s;
+}
+.pt-theme:hover { border-color: var(--border-strong); }
+
+.pt-main { padding: 28px 34px; max-width: 860px; overflow-x: hidden; }
+
+/* ─── Statuszeile ─── */
+.pt-status {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 22px;
+  font-size: .9rem; color: var(--text-muted);
+}
+.pt-status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-subtle); }
+.pt-status .dot.ready { background: var(--accent); }
+.pt-status .dot.recording, .pt-status .dot.transcribing { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+.pt-status .dot.loading { background: var(--text-subtle); animation: pulse 1.1s infinite; }
+.pt-status .dot.error { background: var(--danger); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* ─── Buttons / Formular ─── */
+.pt-btn {
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text);
+  padding: 9px 16px; border-radius: var(--radius-sm); font: inherit; font-size: .9rem;
+  cursor: pointer; touch-action: manipulation; transition: border-color .15s, background-color .15s, color .15s;
+}
+.pt-btn:hover { border-color: var(--accent); }
+.pt-btn:disabled { opacity: .5; cursor: not-allowed; }
+.pt-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pt-btn.primary:hover { background: var(--accent-hover); }
+.pt-btn.ghost { background: transparent; }
+.pt-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.pt-btn.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+.pt-btn.record { background: var(--danger); color: #fff; border-color: var(--danger); font-weight: 600; }
+.pt-btn.stop { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+input, select, textarea { font: inherit; color: var(--text); }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+select { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; background: var(--bg-card); }
+
+/* ─── Eingabe / Editor ─── */
+.pt-editor-wrap { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); overflow: hidden; box-shadow: var(--shadow); }
+.pt-editor-tools { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.pt-editor-tools .spacer { flex: 1; }
+.pt-inline { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--text-muted); }
+.pt-editor { min-height: 280px; max-height: 55vh; overflow-y: auto; }
+.pt-editor .ql-toolbar { border: 0; border-bottom: 1px solid var(--border); background: var(--bg-subtle); }
+.pt-editor .ql-container { border: 0; font: inherit; font-size: 1.05rem; }
+.pt-editor .ql-editor { min-height: 220px; padding: 18px 20px; }
+.pt-editor .ql-editor.ql-blank::before { color: var(--text-subtle); font-style: normal; }
+html[data-theme="dark"] .pt-editor .ql-editor { color: var(--text); }
+html[data-theme="dark"] .ql-toolbar .ql-stroke, html[data-theme="dark"] .ql-toolbar .ql-fill { stroke: var(--text-muted); fill: var(--text-muted); }
+html[data-theme="dark"] .ql-toolbar .ql-picker-label { color: var(--text-muted); }
+html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card); border-color: var(--border); }
+
+/* Aufnahmeregel + Level-Anzeige */
+.pt-recbar { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.pt-level { flex: 1; height: 8px; border-radius: 4px; background: var(--bg-subtle); position: relative; overflow: hidden; }
+.pt-level::after { content: ''; position: absolute; inset: 0; transform-origin: left; transform: scaleX(calc(var(--v,0)/100)); background: var(--accent); transition: transform .12s linear; }
+.pt-lang select { padding: 8px 12px; font-size: 1.1rem; }
+
+/* ─── Historie ─── */
+.pt-history h2, .pt-settings h2, .pt-about h2 { font-size: 1.4rem; margin-bottom: 14px; text-wrap: balance; }
+.pt-empty { color: var(--text-subtle); }
+.pt-histlist { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pt-histlist > li { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+.pt-histbody { flex: 1; min-width: 0; }
+.pt-histtext { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; }
+.pt-histmeta { color: var(--text-subtle); font-size: .8rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.pt-histacts { display: flex; flex-direction: column; gap: 6px; }
+
+/* ─── Einstellungen ─── */
+.pt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: .95rem; }
+.pt-row:last-of-type { border-bottom: 0; }
+.pt-fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px 14px; margin: 18px 0; }
+.pt-fieldset legend { padding: 0 8px; color: var(--text-muted); font-size: .85rem; }
+.pt-settings hr { border: 0; border-top: 1px solid var(--border); margin: 22px 0; }
+.pt-settings h3 { margin: 18px 0 4px; font-size: 1.05rem; }
+
+/* ─── Über ─── */
+.pt-about p { margin: 8px 0; line-height: 1.6; max-width: 62ch; }
+.pt-about .pt-lock { font-weight: 600; }
+.pt-muted { color: var(--text-subtle); font-size: .9rem; }
+.pt-licenses { margin-top: 12px; padding: 14px 16px; background: var(--bg-subtle); border-radius: var(--radius); font-size: .88rem; }
+.pt-licenses ul { margin: 8px 0 0 18px; line-height: 1.7; }
+
+/* ─── Toast + Modal ─── */
+.pt-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg-card); padding: 10px 18px; border-radius: var(--radius-sm); box-shadow: var(--shadow); font-size: .9rem; z-index: 60; }
+.pt-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 100; overscroll-behavior: contain; padding: 20px; }
+.pt-modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; max-width: 420px; box-shadow: var(--shadow); }
+.pt-modal h3 { margin-bottom: 8px; }
+.pt-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+/* ─── Responsiv: schmale Breite → Navi oben ─── */
+@media (max-width: 720px) {
+  .pt-app { grid-template-columns: 1fr; }
+  .pt-nav { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--border); }
+  .pt-brand { padding: 4px 8px; }
+  .pt-navlink { padding: 8px 10px; }
+  .pt-navfoot { margin: 0 0 0 auto; }
+  .pt-theme { width: auto; }
+  .pt-main { padding: 18px; }
+}
+
+/* ─── reduced motion ─── */
 @media (prefers-reduced-motion: reduce) {
-  .spinner { animation-duration: 1.6s; }
-}
-
-/* --- Speaker diarization (Speakers view): turns + colour ----------------- */
-.diar-turns {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-.diar-turn {
-  padding: 0.4rem 0.6rem;
-  border-left: 3px solid var(--diar-color, var(--accent));
-  border-radius: var(--radius-sm);
-  background: var(--diar-bg, var(--bg-subtle));
-}
-.diar-speaker-label {
-  display: inline-block;
-  margin-right: 0.5rem;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: var(--diar-color, var(--accent));
-  /* It is a <button> so it can be clicked to rename, but should read as the
-     plain coloured label until hovered. */
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: text;
-  font-family: inherit;
-}
-.diar-speaker-label:hover {
-  text-decoration: underline dotted;
-  text-underline-offset: 2px;
-}
-.diar-speaker-input {
-  margin-right: 0.5rem;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: var(--diar-color, var(--accent));
-  background: var(--bg-card);
-  border: 1px solid var(--diar-color, var(--accent));
-  border-radius: 4px;
-  padding: 0.05rem 0.3rem;
-  width: 9rem;
-  max-width: 60%;
-}
-.diar-turn-text { white-space: pre-wrap; }
-
-/* 8-colour palette. Hue per speaker; translucent tint reads on both the light
-   and dark card backgrounds, with a solid border/label colour for contrast. */
-.diar-speaker-0 { --diar-color: hsl(348 78% 52%); --diar-bg: hsl(348 78% 52% / 0.10); }
-.diar-speaker-1 { --diar-color: hsl(210 78% 52%); --diar-bg: hsl(210 78% 52% / 0.10); }
-.diar-speaker-2 { --diar-color: hsl(150 60% 40%); --diar-bg: hsl(150 60% 40% / 0.12); }
-.diar-speaker-3 { --diar-color: hsl(38 92% 48%);  --diar-bg: hsl(38 92% 48% / 0.12); }
-.diar-speaker-4 { --diar-color: hsl(270 65% 60%); --diar-bg: hsl(270 65% 60% / 0.12); }
-.diar-speaker-5 { --diar-color: hsl(190 70% 42%); --diar-bg: hsl(190 70% 42% / 0.12); }
-.diar-speaker-6 { --diar-color: hsl(320 60% 55%); --diar-bg: hsl(320 60% 55% / 0.12); }
-.diar-speaker-7 { --diar-color: hsl(95 50% 42%);  --diar-bg: hsl(95 50% 42% / 0.14); }
-
-/* --- Decode-debug view (per-entry "Debug" base mode) --------------------- */
-/* Token pills + inline detail card fed by transcribe()'s collectDecodeDebug
-   payload. Colours ride the theme variables so dark mode needs no overrides. */
-.decode-debug { font-size: 0.9rem; }
-.decode-debug__summary {
-  color: var(--text-subtle);
-  margin-bottom: 0.5rem;
-}
-.decode-debug__chunk-header {
-  color: var(--text-subtle);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0.75rem 0 0.25rem;
-  border-top: 1px dashed var(--border);
-  padding-top: 0.5rem;
-}
-.decode-debug__pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  row-gap: 4px;
-  align-items: baseline;
-}
-.debug-pill {
-  font: inherit;
-  font-family: ui-monospace, monospace;
-  font-size: 0.85rem;
-  color: var(--text);
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.05rem 0.3rem;
-  cursor: pointer;
-  line-height: 1.4;
-}
-/* Word-start pieces (SentencePiece '▁') open a visible word gap. */
-.debug-pill--wordstart { margin-left: 0.45rem; }
-.decode-debug__pills .debug-pill:first-child { margin-left: 0; }
-/* Confidence tint on the bottom edge: red = the decoder hesitated here. */
-.debug-pill--conf-low  { border-bottom: 3px solid hsl(348 78% 52% / 0.8); }
-.debug-pill--conf-mid  { border-bottom: 3px solid hsl(38 92% 48% / 0.8); }
-.debug-pill--conf-high { border-bottom: 3px solid hsl(150 60% 40% / 0.55); }
-/* Phrase-boosted emissions. */
-.debug-pill--boosted {
-  background: var(--accent-soft-bg);
-  border-color: var(--accent-soft-border);
-  color: var(--accent-soft-text);
-}
-.debug-pill:hover { border-color: var(--border-strong); }
-.debug-pill.active {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.decode-debug__card {
-  margin: 0.5rem 0;
-  padding: 0.6rem 0.75rem;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.decode-debug__metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
-  margin-bottom: 0.5rem;
-}
-.decode-debug__metric-label {
-  display: block;
-  color: var(--text-subtle);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.decode-debug__metric-value {
-  font-family: ui-monospace, monospace;
-  font-size: 0.85rem;
-}
-.decode-debug__subtitle {
-  color: var(--text-subtle);
-  font-size: 0.8rem;
-  margin: 0.6rem 0 0.25rem;
-}
-/* Wide tables scroll inside the card, never the page. */
-.decode-debug__table-wrap { overflow-x: auto; }
-.decode-debug__table {
-  border-collapse: collapse;
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-  width: 100%;
-}
-.decode-debug__table th {
-  text-align: left;
-  color: var(--text-subtle);
-  font-weight: 600;
-  padding: 0.15rem 0.75rem 0.15rem 0;
-  border-bottom: 1px solid var(--border);
-}
-.decode-debug__table td {
-  padding: 0.15rem 0.75rem 0.15rem 0;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.decode-debug__row--chosen td {
-  background: var(--accent-soft-bg);
-  color: var(--accent-soft-text);
-}
-.decode-debug__tail { max-width: 24rem; overflow: hidden; text-overflow: ellipsis; }
-
-/* "Benchmark complete" line in the sidebar Benchmark section. A finished run
-   reopens the sidebar and scrolls here, so this is what the user lands on. */
-.benchmark-complete {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--success);
-  margin: 0.4rem 0 0;
+  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
