@@ -23,7 +23,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "app" / "ui" / "dist"
 MODELS = Path(os.environ.get("LOCAL_MODEL_PATH", ROOT / "models")).resolve()
-MODELS_INT4 = Path(os.environ.get("LOCAL_MODEL_PATH_INT4", ROOT / "models-int4")).resolve()
 PORT = int(os.environ.get("PORT", 8787))
 
 MIME = {
@@ -51,8 +50,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
         # /models/*  ->  MODELS/*
         path = path.split("?", 1)[0].split("#", 1)[0]
-        if path.startswith("/models-int4/"):
-            return str(MODELS_INT4 / path[len("/models-int4/"):])
         if path.startswith("/models/"):
             return str(MODELS / path[len("/models/"):])
         if path.startswith("/dictation-regex/"):
@@ -102,7 +99,6 @@ def main():
 
     print(f"  UI:    {DIST}")
     print(f"  Model: {MODELS} ({'OK' if MODELS.exists() else 'FEHLT - hf download Olicorne/... --local-dir models'})")
-    print(f"  Model-int4: {MODELS_INT4} ({'OK' if MODELS_INT4.exists() else 'nicht vorhanden'})")
     httpd.serve_forever()
 
 

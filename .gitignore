@@ -55,3 +55,4 @@ audio_testfiles
 models/
 app/ui/dist/
 models-int4/
+models-int8/
