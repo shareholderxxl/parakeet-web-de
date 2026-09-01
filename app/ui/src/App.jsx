@@ -1549,7 +1549,9 @@ export default function App() {
           loadSetting('backend', null),
           loadSetting('backendUserPicked', false),
           loadSetting('perfProbeVerdict', null),
-          loadSetting('wasmEncoderQuant', 'int4'),
+          // (parakeet-web-de: Key v2 - alte int8-Wahl aus Phase int8-default
+          // ueberschreibt sonst den neuen int4-Default)
+          loadSetting('wasmEncoderQuant.v2', 'int4'),
           loadSetting('webgpuEncoderQuant', 'fp32'),
           loadSetting('preprocessor', 'nemo128'),
           loadSetting('verboseLog', false),
@@ -2107,7 +2109,7 @@ export default function App() {
   usePersistedSetting('backendUserPicked', backendUserPicked, settingsLoaded);
   usePersistedSetting('perfProbeVerdict', probeVerdict, settingsLoaded);
   // Persist the WASM encoder-precision choice (int8 / fp32).
-  usePersistedSetting('wasmEncoderQuant', wasmEncoderQuant, settingsLoaded);
+  usePersistedSetting('wasmEncoderQuant.v2', wasmEncoderQuant, settingsLoaded);
   // Persist the WebGPU encoder-precision choice.
   usePersistedSetting('webgpuEncoderQuant', webgpuEncoderQuant, settingsLoaded);
 
