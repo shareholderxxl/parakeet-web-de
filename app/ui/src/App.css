@@ -75,6 +75,7 @@ body { font-family: var(--font); color: var(--text); background: var(--bg-page);
 .pt-theme:hover { border-color: var(--border-strong); }
 
 .pt-main { padding: 28px 34px; max-width: 860px; overflow-x: hidden; }
+.pt-hidden { display: none !important; }
 
 /* ─── Statuszeile ─── */
 .pt-status {

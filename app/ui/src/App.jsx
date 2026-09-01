@@ -403,8 +403,7 @@ export default function App() {
           {status === 'error' && <button className="pt-btn" style={{ marginLeft: 'auto' }} onClick={loadModel}>{tr('loadModel')}</button>}
         </header>
 
-        {view === 'input' && (
-          <section className="pt-input">
+        <section className={`pt-input${view !== 'input' ? ' pt-hidden' : ''}`}>
             <div className="pt-editor-wrap">
               <div className="pt-editor-tools">
                 <button className="pt-btn" onMouseDown={preventBlur} onClick={async (e) => { e.stopPropagation(); await copyEditor(true); }}>📋 {tr('copy')}</button>
@@ -426,10 +425,8 @@ export default function App() {
               )}
             </div>
           </section>
-        )}
 
-        {view === 'history' && (
-          <section className="pt-history">
+        <section className={`pt-history${view !== 'history' ? ' pt-hidden' : ''}`}>
             <h2>{tr('histTitle')}</h2>
             {transcriptions.length === 0 ? <p className="pt-empty">{tr('histEmpty')}</p> : (
               <ul className="pt-histlist">
@@ -449,10 +446,8 @@ export default function App() {
               </ul>
             )}
           </section>
-        )}
 
-        {view === 'settings' && (
-          <section className="pt-settings">
+        <section className={`pt-settings${view !== 'settings' ? ' pt-hidden' : ''}`}>
             <h2>{tr('navSettings')}</h2>
             <label className="pt-row"><span>{tr('dictationOn')}</span><input type="checkbox" checked={dictationEnabled} onChange={e => setDictationEnabled(e.target.checked)} /></label>
             <label className="pt-row"><span>{tr('persistLabel')}</span><input type="checkbox" checked={persistTranscripts} onChange={e => setPersistTranscripts(e.target.checked)} /></label>
@@ -471,10 +466,8 @@ export default function App() {
             <hr />
             <button className="pt-btn danger" onClick={() => setConfirmReset(true)}>{tr('resetAll')}</button>
           </section>
-        )}
 
-        {view === 'about' && (
-          <section className="pt-about">
+        <section className={`pt-about${view !== 'about' ? ' pt-hidden' : ''}`}>
             <h2>{tr('app')}</h2>
             <p>{tr('aboutDesc')}</p>
             <p className="pt-lock">🔒 {tr('aboutPrivacy')}</p>
@@ -493,7 +486,6 @@ export default function App() {
               </div>
             )}
           </section>
-        )}
 
         {toast && <div className="pt-toast" role="status" aria-live="polite">{toast}</div>}
 
