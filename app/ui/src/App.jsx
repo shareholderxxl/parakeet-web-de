@@ -102,7 +102,7 @@ const STR = {
   de: {
     app: 'portabletranscribe', navInput: 'Eingabe', navHistory: 'Historie',
     navSettings: 'Einstellungen', navAbout: 'Über',
-    loadModel: 'Modell laden', loadingModel: 'Modell wird geladen…', modelReady: 'Bereit',
+    loadModel: 'Modell laden', loadingModel: 'Modell wird geladen…', modelReady: 'Bereit', transcribing: 'Transkribiere…',
     record: 'Aufnahme', stop: 'Stopp', copy: 'Kopieren', copyPlain: 'Als Text kopieren',
     copied: 'Kopiert', clear: 'Leeren', dictationOn: 'Diktat-Modus',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -124,7 +124,7 @@ const STR = {
   en: {
     app: 'portabletranscribe', navInput: 'Dictation', navHistory: 'History',
     navSettings: 'Settings', navAbout: 'About',
-    loadModel: 'Load model', loadingModel: 'Loading model…', modelReady: 'Ready',
+    loadModel: 'Load model', loadingModel: 'Loading model…', modelReady: 'Ready', transcribing: 'Transcribing…',
     record: 'Record', stop: 'Stop', copy: 'Copy', copyPlain: 'Copy as text',
     copied: 'Copied', clear: 'Clear', dictationOn: 'Dictation mode',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -178,6 +178,7 @@ export default function App() {
   const [canRecord, setCanRecord] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [level, setLevel] = useState(0);
+  const [chunkProg, setChunkProg] = useState(null); // null | {n,total}
   const [confirmReset, setConfirmReset] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
   const [toast, setToast] = useState('');
@@ -384,10 +385,12 @@ export default function App() {
     try {
       const audio16 = await resamplePcmTo16k(pcm, nativeRate);
       const dur = audio16.length / 16000;
+      setChunkProg({ n: 0, total: 1 });
       const res = await modelRef.current.transcribeChunked(audio16, 16000, {
         enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
         returnTimestamps: true, temperature: 0, beamWidth: Number(beamWidth), frameStride: 8, enableProfiling: false,
-      });
+      }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
+      setChunkProg(null);
       let text = res.utterance_text || '';
       const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length };
       setTranscriptions(prev => [entry, ...prev]);
@@ -423,7 +426,7 @@ export default function App() {
       <main className="pt-main">
         <header className="pt-status" aria-live="polite">
           <span className={`dot ${status}`} aria-hidden="true"></span>
-          <span>{status === 'ready' || status === 'recording' ? tr('modelReady') : status === 'error' ? (error || tr('loadModel')) : status === 'loading' ? tr('loadingModel') : status === 'transcribing' ? '…' : ''} </span>
+          <span>{status === 'ready' || status === 'recording' ? tr('modelReady') : status === 'error' ? (error || tr('loadModel')) : status === 'loading' ? tr('loadingModel') : status === 'transcribing' ? tr('transcribing') + (chunkProg && chunkProg.total > 1 ? ` (${chunkProg.n}/${chunkProg.total})` : '') : ''} </span>
           {status !== 'ready' && status !== 'recording' && status !== 'transcribing' && status !== 'error' && (
             <button className="pt-btn primary" style={{ marginLeft: 'auto' }} onClick={loadModel} disabled={status === 'loading'}>
               {status === 'loading' ? tr('loadingModel') : tr('loadModel')}

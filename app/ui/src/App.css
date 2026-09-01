@@ -83,7 +83,7 @@ body { font-family: var(--font); color: var(--text); background: var(--bg-page);
   font-size: .9rem; color: var(--text-muted);
 }
 .pt-status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-subtle); }
-.pt-status .dot.ready { background: var(--accent); }
+.pt-status .dot.ready { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.45); }
 .pt-status .dot.recording, .pt-status .dot.transcribing { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
 .pt-status .dot.loading { background: var(--text-subtle); animation: pulse 1.1s infinite; }
 .pt-status .dot.error { background: var(--danger); }
