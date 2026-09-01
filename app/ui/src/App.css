@@ -143,6 +143,8 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: .95rem; }
 .pt-row:last-of-type { border-bottom: 0; }
 .pt-fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px 14px; margin: 18px 0; }
+.pt-cache { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60%; }
+.pt-cache .pt-btn { padding: 5px 10px; font-size: .8rem; }
 .pt-fieldset legend { padding: 0 8px; color: var(--text-muted); font-size: .85rem; }
 .pt-settings hr { border: 0; border-top: 1px solid var(--border); margin: 22px 0; }
 .pt-settings h3 { margin: 18px 0 4px; font-size: 1.05rem; }

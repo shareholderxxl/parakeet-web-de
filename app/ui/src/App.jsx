@@ -111,6 +111,9 @@ const STR = {
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', beamLabel: 'Beam-Breite', threadsLabel: 'CPU-Threads',
     resetAll: 'Einstellungen & Verlauf zurücksetzen', resetConfirm: 'Alle Einstellungen und das Verlaufs-Gedächtnis wirklich löschen?',
+    cachePersistLabel: 'Modell-Cache', cachePersistYes: 'dauerhaft gespeichert',
+    cachePersistNo: 'nur best effort – kann unter Speicherdruck entfernt werden',
+    cachePersistUnknown: 'nicht geprüft', cachePersistAsk: 'Dauerhaft schützen',
     aboutDesc: 'portabletranscribe ist eine lokale Diktier-App: Sprache wird vollständig in deinem Browser transkribiert, Audio verlässt dein Gerät nicht.',
     aboutModel: 'Modell: NVIDIA Parakeet TDT 0.6B v3 (int4, 25 Sprachen inkl. Deutsch).',
     aboutFork: 'Diese App basiert auf / ist ein Fork von „parakeet_web“ (thiswillbeyourgithub).',
@@ -130,6 +133,9 @@ const STR = {
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', beamLabel: 'Beam width', threadsLabel: 'CPU threads',
     resetAll: 'Reset settings & history', resetConfirm: 'Really delete all settings and transcript history?',
+    cachePersistLabel: 'Model cache', cachePersistYes: 'persistently stored',
+    cachePersistNo: 'best effort only – may be evicted under storage pressure',
+    cachePersistUnknown: 'not checked', cachePersistAsk: 'Protect storage',
     aboutDesc: 'portabletranscribe is a local dictation app: speech is transcribed entirely in your browser; audio never leaves your device.',
     aboutModel: 'Model: NVIDIA Parakeet TDT 0.6B v3 (int4, 25 languages incl. German).',
     aboutFork: 'This app is based on / a fork of “parakeet_web” (thiswillbeyourgithub).',
@@ -163,6 +169,7 @@ export default function App() {
   const [cpuThreads, setCpuThreads] = useState(4);
   const [theme, setTheme] = useState(currentTheme());
   const [showLicenses, setShowLicenses] = useState(false);
+  const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
 
   // Engine / transcribe state
   const modelRef = useRef(null);
@@ -215,6 +222,27 @@ export default function App() {
   }
 
   useEffect(() => { loadDictationRegex(); }, []);
+
+  async function requestCachePersist() {
+    try {
+      if (navigator.storage?.persist) {
+        const granted = await navigator.storage.persist();
+        setCachePersist(!!granted);
+        return !!granted;
+      }
+    } catch (e) { console.warn('[storage] persist failed:', e); }
+    setCachePersist(false);
+    return false;
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (navigator.storage?.persisted) setCachePersist(!!(await navigator.storage.persisted()));
+        else setCachePersist(null);
+      } catch { setCachePersist(null); }
+    })();
+  }, []);
 
   // Settings + History laden
   useEffect(() => {
@@ -309,6 +337,7 @@ export default function App() {
         cpuThreads: Number(cpuThreads), preprocessorBackend: modelUrls.preprocessorBackend, nMels,
       });
       setStatus('ready'); setCanRecord(true);
+      requestCachePersist();
     } catch (e) {
       console.error('[loadModel]', e); setError(transcribeErrorMessage(e)); setStatus('error');
     }
@@ -463,6 +492,10 @@ export default function App() {
               <select value={lang} onChange={e => setLang(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="de">Deutsch</option><option value="en">English</option></select></label>
             <div className="pt-row"><span>{tr('theme')}</span>
               <button className="pt-btn" onClick={() => setThemeAndStore(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '🌙 Dunkel' : '☀️ Hell'}</button></div>
+            <label className="pt-row"><span>{tr('cachePersistLabel')}</span>
+              <span className="pt-cache">{cachePersist === true ? '✅ ' + tr('cachePersistYes') : cachePersist === false ? '⚠️ ' + tr('cachePersistNo') : tr('cachePersistUnknown')}
+                {cachePersist === false && <button className="pt-btn ghost" onClick={() => requestCachePersist()}>{tr('cachePersistAsk')}</button>}
+              </span></label>
             <hr />
             <button className="pt-btn danger" onClick={() => setConfirmReset(true)}>{tr('resetAll')}</button>
           </section>
