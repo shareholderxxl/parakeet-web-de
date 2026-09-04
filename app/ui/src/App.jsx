@@ -105,6 +105,7 @@ const STR = {
     loadModel: 'Modell laden', loadingModel: 'Modell wird geladen…', modelReady: 'Bereit', transcribing: 'Transkribiere…',
     record: 'Aufnahme', stop: 'Stopp', copy: 'Kopieren', copyPlain: 'Als Text kopieren',
     copied: 'Kopiert', clear: 'Leeren', dictationOn: 'Diktat-Modus',
+    saveToHistory: 'In Historie speichern', savedToHistory: 'In Historie gespeichert',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
     delete: 'Löschen', delConfirm: 'Dieses Transkript dauerhaft löschen?', yes: 'Löschen', no: 'Abbrechen',
     micTitle: 'Mikrofon', langLabel: 'Transkriptionssprache', persistLabel: 'Transkripte speichern',
@@ -127,6 +128,7 @@ const STR = {
     loadModel: 'Load model', loadingModel: 'Loading model…', modelReady: 'Ready', transcribing: 'Transcribing…',
     record: 'Record', stop: 'Stop', copy: 'Copy', copyPlain: 'Copy as text',
     copied: 'Copied', clear: 'Clear', dictationOn: 'Dictation mode',
+    saveToHistory: 'Save to history', savedToHistory: 'Saved to history',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
     delete: 'Delete', delConfirm: 'Permanently delete this transcript?', yes: 'Delete', no: 'Cancel',
     micTitle: 'Microphone', langLabel: 'Transcription language', persistLabel: 'Save transcripts',
@@ -320,6 +322,16 @@ export default function App() {
   }
   function clearEditor() { quillRef.current?.setText(''); quillRef.current?.focus(); }
 
+  async function saveEditorToHistory() {
+    const q = quillRef.current;
+    if (!q) return;
+    const text = q.getText().replace(/\n$/, '');
+    if (!text.trim()) { flash(tr('histEmpty')); return; }
+    const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length };
+    setTranscriptions(prev => [entry, ...prev]);
+    flash(tr('savedToHistory'));
+  }
+
   /* ─── Modell laden ─── */
   const repoId = CONFIG.VITE_MODEL_REPO || 'efederici/parakeet-tdt-0.6b-v3-onnx-int4';
   async function loadModel() {
@@ -441,6 +453,7 @@ export default function App() {
                 <button className="pt-btn" onMouseDown={preventBlur} onClick={async (e) => { e.stopPropagation(); await copyEditor(true); }}>📋 {tr('copy')}</button>
                 <button className="pt-btn ghost" onMouseDown={preventBlur} onClick={async (e) => { e.stopPropagation(); await copyEditor(false); }}>{tr('copyPlain')}</button>
                 <button className="pt-btn ghost" onMouseDown={preventBlur} onClick={(e) => { e.stopPropagation(); clearEditor(); }}>{tr('clear')}</button>
+                <button className="pt-btn" onMouseDown={preventBlur} onClick={async (e) => { e.stopPropagation(); await saveEditorToHistory(); }}>💾 {tr('saveToHistory')}</button>
                 <span className="spacer"></span>
                 <label className="pt-inline"><input type="checkbox" checked={dictationEnabled} onChange={e => setDictationEnabled(e.target.checked)} /> {tr('dictationOn')}</label>
               </div>
