@@ -8,6 +8,7 @@ import { CONFIG } from './config.js';
 import { openIdb, idbGet, idbPut, idbDeleteDatabase } from '../../src/idb.js';
 import { resamplePcmTo16k, createLevelMonitor } from './lib/audio.js';
 import { acquireKeepalive, releaseKeepalive } from './lib/keepalive.js';
+import { buildExportJson, buildExportTxt, exportFilename, parseImportJson, mergeEntries, downloadBlob } from './lib/historyIo.js';
 
 /* ─── IndexedDB: Settings + Transkripte (Schema wie bisher, text-only) ─── */
 const SETTINGS_DB_NAME = 'parakeetweb-settings-db';
@@ -106,6 +107,13 @@ const STR = {
     record: 'Aufnahme', stop: 'Stopp', copy: 'Kopieren', copyPlain: 'Als Text kopieren',
     copied: 'Kopiert', clear: 'Leeren', dictationOn: 'Diktat-Modus',
     saveToHistory: 'In Historie speichern', savedToHistory: 'In Historie gespeichert',
+    draftRestored: 'Entwurf wiederhergestellt',
+    exportAll: 'Alle exportieren', exportFormatTitle: 'Export-Format wählen',
+    exportFormatHint: 'Die komplette Historie wird in eine Datei exportiert.',
+    exportJson: 'JSON-Backup (re-importierbar)', exportTxt: 'Textdatei (.txt, lesbar)',
+    exportEntry: 'Als Textdatei speichern', importJson: 'JSON importieren',
+    importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
+    importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
     delete: 'Löschen', delConfirm: 'Dieses Transkript dauerhaft löschen?', yes: 'Löschen', no: 'Abbrechen',
     micTitle: 'Mikrofon', langLabel: 'Transkriptionssprache', persistLabel: 'Transkripte speichern',
@@ -129,6 +137,13 @@ const STR = {
     record: 'Record', stop: 'Stop', copy: 'Copy', copyPlain: 'Copy as text',
     copied: 'Copied', clear: 'Clear', dictationOn: 'Dictation mode',
     saveToHistory: 'Save to history', savedToHistory: 'Saved to history',
+    draftRestored: 'Draft restored',
+    exportAll: 'Export all', exportFormatTitle: 'Choose export format',
+    exportFormatHint: 'The complete history will be exported to a single file.',
+    exportJson: 'JSON backup (re-importable)', exportTxt: 'Text file (.txt, readable)',
+    exportEntry: 'Save as text file', importJson: 'Import JSON',
+    importConfirm: 'Import {n} entries? Existing entries are kept.',
+    importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
     delete: 'Delete', delConfirm: 'Permanently delete this transcript?', yes: 'Delete', no: 'Cancel',
     micTitle: 'Microphone', langLabel: 'Transcription language', persistLabel: 'Save transcripts',
@@ -187,6 +202,36 @@ export default function App() {
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 1800); };
 
   const [transcriptions, setTranscriptions] = useState([]);
+
+  // Export/Import + Export-Format-Wahl
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [importPreview, setImportPreview] = useState(null); // validierte Einträge oder null
+  const importInputRef = useRef(null);
+  function exportAllAs(fmt) {
+    const entries = [...transcriptions].sort((a, b) => a.id - b.id);
+    if (fmt === 'json') downloadBlob(buildExportJson(entries), exportFilename('portabletranscribe-historie', 'json'), 'application/json');
+    else downloadBlob(buildExportTxt(entries), exportFilename('portabletranscribe-historie', 'txt'), 'text/plain;charset=utf-8');
+    setShowExportMenu(false);
+  }
+  async function onImportFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // gleiche Datei erneut wählbar machen
+    if (!file) return;
+    try {
+      const parsed = parseImportJson(await file.text());
+      if (!parsed.ok || parsed.entries.length === 0) { flash(tr('importInvalid')); return; }
+      setImportPreview(parsed.entries);
+    } catch (err) { console.warn('[import]', err); flash(tr('importInvalid')); }
+  }
+  function confirmImport() {
+    const n = importPreview.length;
+    setTranscriptions(prev => mergeEntries(prev, importPreview));
+    setImportPreview(null);
+    flash(tr('importedCount').replace('{n}', String(n)));
+  }
+  function exportEntry(t) {
+    downloadBlob(t.text || '', exportFilename('portabletranscribe', 'txt', t.id), 'text/plain;charset=utf-8');
+  }
 
   // Diktat-Regeln
   const [dictationRules, setDictationRules] = useState([]);
@@ -290,7 +335,30 @@ export default function App() {
       modules: { toolbar: [['bold', 'italic', 'underline', 'clean'], [{ list: 'ordered' }, { list: 'bullet' }]] },
     });
     quillRef.current = q;
-    return () => {};
+
+    // Autosave: Entwurf (Quill-Delta) debounced in IndexedDB persistieren
+    let timer = null;
+    const saveDraft = () => saveSetting('editorDraft', q.getContents());
+    const scheduleSave = () => { clearTimeout(timer); timer = setTimeout(saveDraft, 800); };
+    q.on('text-change', scheduleSave);
+    const flushDraft = () => { clearTimeout(timer); saveDraft(); };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushDraft(); };
+    window.addEventListener('beforeunload', flushDraft);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Wiederherstellung beim Start (nur wenn tatsächlich Inhalt vorhanden)
+    loadSetting('editorDraft', null).then(delta => {
+      if (delta && Array.isArray(delta.ops) && delta.ops.length && quillRef.current === q && !q.getText().trim()) {
+        try { q.setContents(delta, 'silent'); flash(tr('draftRestored')); } catch (e) { console.warn('[draft] restore failed:', e); }
+      }
+    });
+
+    return () => {
+      try { q.off('text-change', scheduleSave); } catch {}
+      clearTimeout(timer);
+      window.removeEventListener('beforeunload', flushDraft);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
   function caretIndex() {
     const q = quillRef.current; if (!q) return 0;
@@ -472,7 +540,14 @@ export default function App() {
           </section>
 
         <section className={`pt-history${view !== 'history' ? ' pt-hidden' : ''}`}>
-            <h2>{tr('histTitle')}</h2>
+            <div className="pt-histhead">
+              <h2>{tr('histTitle')}</h2>
+              {transcriptions.length > 0 && (
+                <button className="pt-btn ghost" onClick={() => setShowExportMenu(true)}>⬇ {tr('exportAll')}</button>
+              )}
+              <button className="pt-btn ghost" onClick={() => importInputRef.current?.click()}>⬆ {tr('importJson')}</button>
+              <input type="file" accept=".json,application/json" hidden ref={importInputRef} onChange={onImportFile} aria-hidden="true" tabIndex={-1} />
+            </div>
             {transcriptions.length === 0 ? <p className="pt-empty">{tr('histEmpty')}</p> : (
               <ul className="pt-histlist">
                 {transcriptions.map(t => (
@@ -484,6 +559,7 @@ export default function App() {
                     <div className="pt-histacts">
                       <button className="pt-btn" onClick={() => { go('input'); setTimeout(() => insertAtCaret(applyDictation(t.text || '')), 60); }}>{tr('insertToEditor')}</button>
                       <button className="pt-btn ghost" onClick={async () => { try { await navigator.clipboard.writeText(sanitizeClipboardText(t.text || '')); flash(tr('copied')); } catch {} }}>📋</button>
+                      <button className="pt-btn ghost" onClick={() => exportEntry(t)} aria-label={tr('exportEntry')} title={tr('exportEntry')}>⬇</button>
                       <button className="pt-btn danger" onClick={() => setDelTarget(t.id)}>{tr('delete')}</button>
                     </div>
                   </li>
@@ -545,6 +621,32 @@ export default function App() {
               <div className="pt-modal-actions">
                 <button className="pt-btn danger" onClick={async () => { await clearAllSettings(); await clearTranscriptsDb(); setTranscriptions([]); setConfirmReset(false); }}>{tr('yes')}</button>
                 <button className="pt-btn" onClick={() => setConfirmReset(false)}>{tr('no')}</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showExportMenu && (
+          <div className="pt-modal-bg" onClick={() => setShowExportMenu(false)}>
+            <div className="pt-modal" role="dialog" aria-modal="true" aria-labelledby="export-t" onClick={e => e.stopPropagation()}>
+              <h3 id="export-t">{tr('exportFormatTitle')}</h3>
+              <p>{tr('exportFormatHint')}</p>
+              <div className="pt-export-options">
+                <button className="pt-btn" onClick={() => exportAllAs('json')}>{tr('exportJson')}</button>
+                <button className="pt-btn" onClick={() => exportAllAs('txt')}>{tr('exportTxt')}</button>
+              </div>
+              <div className="pt-modal-actions">
+                <button className="pt-btn ghost" onClick={() => setShowExportMenu(false)}>{tr('no')}</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {importPreview && (
+          <div className="pt-modal-bg" onClick={() => setImportPreview(null)}>
+            <div className="pt-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+              <p>{tr('importConfirm').replace('{n}', String(importPreview.length))}</p>
+              <div className="pt-modal-actions">
+                <button className="pt-btn primary" onClick={confirmImport}>{tr('importYes')}</button>
+                <button className="pt-btn" onClick={() => setImportPreview(null)}>{tr('no')}</button>
               </div>
             </div>
           </div>
