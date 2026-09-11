@@ -78,6 +78,7 @@ function formatDay(ts, lang) {
   if (!Number.isFinite(ts)) return '—';
   return new Date(ts).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
+const VAD_STATE_KEYS = { calibrating: 'vadStateCalibrating', waiting: 'vadStateWaiting', listening: 'vadStateListening', silence: 'vadStateSilence' };
 async function fetchTextCapped(url, maxBytes = 5_000_000) {
   try {
     const res = await fetch(url);
@@ -140,7 +141,8 @@ const STR = {
     statDuration: 'Aufnahmedauer gesamt', statDurationHint: 'wird erst seit Einführung erfasst – ältere Einträge ohne Dauer',
     statFirst: 'Ältester Eintrag', statLast: 'Neuester Eintrag',
     vadLabel: 'Auto-Stopp bei Stille', vadDurLabel: 'Stille-Dauer (s)', vadSensLabel: 'Empfindlichkeit',
-    vadSensLow: 'niedrig', vadSensMedium: 'mittel', vadSensHigh: 'hoch', vadSilenceShort: 'Stille',
+    vadSensLow: 'niedrig', vadSensMedium: 'mittel', vadSensHigh: 'hoch',
+    vadStateCalibrating: 'Kalibriere…', vadStateWaiting: 'warte auf Sprache', vadStateListening: 'Sprache', vadStateSilence: 'Stille', vadMeter: 'Pegel',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -182,7 +184,8 @@ const STR = {
     statDuration: 'Total recording time', statDurationHint: 'recorded only recently – older entries have no duration',
     statFirst: 'Oldest entry', statLast: 'Newest entry',
     vadLabel: 'Auto-stop on silence', vadDurLabel: 'Silence duration (s)', vadSensLabel: 'Sensitivity',
-    vadSensLow: 'low', vadSensMedium: 'medium', vadSensHigh: 'high', vadSilenceShort: 'silence',
+    vadSensLow: 'low', vadSensMedium: 'medium', vadSensHigh: 'high',
+    vadStateCalibrating: 'calibrating…', vadStateWaiting: 'waiting for speech', vadStateListening: 'speech', vadStateSilence: 'silence', vadMeter: 'level',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -232,6 +235,8 @@ export default function App() {
   const [vadSilenceSec, setVadSilenceSec] = useState(5);
   const [vadSensitivity, setVadSensitivity] = useState('medium');
   const [vadSilence, setVadSilence] = useState(0); // laufende Stille (nur Anzeige)
+  const [vadState, setVadState] = useState('waiting');
+  const [vadEffective, setVadEffective] = useState(null);
 
   // Engine / transcribe state
   const modelRef = useRef(null);
@@ -521,6 +526,8 @@ export default function App() {
         if (d) {
           const r = d.feed(lv, performance.now());
           setVadSilence(r.silenceSec);
+          setVadState(r.state);
+          setVadEffective(r.effective);
           if (r.shouldStop) stopRef.current?.();
         }
       });
@@ -533,7 +540,7 @@ export default function App() {
   async function stopAndTranscribe() {
     if (!isRecording) return;
     setIsRecording(false); setStatus('transcribing');
-    vadRef.current = null; setVadSilence(0);
+    vadRef.current = null; setVadSilence(0); setVadState('waiting'); setVadEffective(null);
     try { workletRef.current?.port?.close?.(); } catch {}
     const ctx = ctxRef.current;
     mediaRef.current.forEach(t => t.stop()); mediaRef.current = [];
@@ -634,7 +641,13 @@ export default function App() {
             </div>
             <div className="pt-recbar">
               <div className="pt-level" style={{ '--v': level }} aria-hidden="true"></div>
-              {isRecording && vadEnabled && <span className="pt-vadinfo" aria-live="off">⏸ {tr('vadSilenceShort')} {vadSilence.toFixed(1)}/{vadSilenceSec} s</span>}
+              {isRecording && vadEnabled && (
+                <span className="pt-vadinfo" aria-live="off">
+                  ⏸ {tr(VAD_STATE_KEYS[vadState] || 'vadStateWaiting')}
+                  {` · ${tr('vadMeter')} ${Math.round(level)}${vadEffective != null ? '/' + Math.round(vadEffective) : ''}`}
+                  {vadState === 'silence' ? ` · ${vadSilence.toFixed(1)}/${vadSilenceSec} s` : ''}
+                </span>
+              )}
               {status !== 'recording' ? (
                 <button className="pt-btn record" onMouseDown={preventBlur} onClick={(e) => { e.stopPropagation(); if (canRecord) startRecording(); else loadModel(); }}>
                   ● {canRecord ? tr('record') : tr('loadModel')}
