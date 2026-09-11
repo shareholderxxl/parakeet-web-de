@@ -9,6 +9,7 @@ import { openIdb, idbGet, idbPut, idbDeleteDatabase } from '../../src/idb.js';
 import { resamplePcmTo16k, createLevelMonitor } from './lib/audio.js';
 import { acquireKeepalive, releaseKeepalive } from './lib/keepalive.js';
 import { buildExportJson, buildExportTxt, exportFilename, parseImportJson, mergeEntries, downloadBlob } from './lib/historyIo.js';
+import { applyUserRules, validateRule } from './lib/dictationRules.js';
 
 /* ─── IndexedDB: Settings + Transkripte (Schema wie bisher, text-only) ─── */
 const SETTINGS_DB_NAME = 'parakeetweb-settings-db';
@@ -116,6 +117,10 @@ const STR = {
     exportJson: 'JSON-Backup (re-importierbar)', exportTxt: 'Textdatei (.txt, lesbar)',
     exportEntry: 'Als Textdatei speichern', importJson: 'JSON importieren',
     histSearch: 'Historie durchsuchen', histNoMatch: 'Keine Treffer.', histCount: '{n} von {total} Einträgen', histClear: 'Suche leeren',
+    customRules: 'Eigene Ersetzungen', customRulesHint: 'Zusätzlich zu den festen Regeln; werden zuletzt angewendet.',
+    ruleFind: 'Suchen', ruleReplace: 'Ersetzen', ruleRegex: 'Regex', ruleCase: 'Groß/Klein beachten',
+    addRule: 'Hinzufügen', ruleEmpty: 'Bitte einen Suchbegriff angeben.', ruleInvalidRegex: 'Ungültiger regulärer Ausdruck.',
+    noRules: 'Noch keine eigenen Ersetzungen.',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -147,6 +152,10 @@ const STR = {
     exportJson: 'JSON backup (re-importable)', exportTxt: 'Text file (.txt, readable)',
     exportEntry: 'Save as text file', importJson: 'Import JSON',
     histSearch: 'Search history', histNoMatch: 'No matches.', histCount: '{n} of {total} entries', histClear: 'Clear search',
+    customRules: 'Custom replacements', customRulesHint: 'In addition to the built-in rules; applied last.',
+    ruleFind: 'Find', ruleReplace: 'Replace with', ruleRegex: 'Regex', ruleCase: 'Case sensitive',
+    addRule: 'Add', ruleEmpty: 'Please enter a search term.', ruleInvalidRegex: 'Invalid regular expression.',
+    noRules: 'No custom replacements yet.',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -241,6 +250,10 @@ export default function App() {
 
   // Diktat-Regeln
   const [dictationRules, setDictationRules] = useState([]);
+  // Eigene Ersetzungen (Nutzer-Regeln)
+  const [userRules, setUserRules] = useState([]);
+  const [newRule, setNewRule] = useState({ find: '', replacement: '', isRegex: false, caseSensitive: false });
+  const [ruleError, setRuleError] = useState('');
   async function loadDictationRegex() {
     try {
       const manifest = await fetchTextCapped('/dictation-regex/manifest.txt');
@@ -267,13 +280,24 @@ export default function App() {
     } catch (e) { console.warn('[Dictation] load failed:', e); }
   }
   function applyDictation(text) {
-    if (!dictationEnabled || !dictationRules.length || !text) return text;
+    if (!dictationEnabled || !text) return text;
     let out = text;
-    for (const rule of dictationRules) {
-      try { out = out.replace(new RegExp(rule.regex, rule.flags), rule.replacement); } catch {}
+    if (dictationRules.length) {
+      for (const rule of dictationRules) {
+        try { out = out.replace(new RegExp(rule.regex, rule.flags), rule.replacement); } catch {}
+      }
     }
-    return out;
+    return applyUserRules(out, userRules);
   }
+  function addUserRule() {
+    const res = validateRule(newRule);
+    if (!res.ok) { setRuleError(tr(res.error === 'regex' ? 'ruleInvalidRegex' : 'ruleEmpty')); return; }
+    setUserRules(prev => [{ id: Date.now(), ...res.value }, ...prev]);
+    setNewRule({ find: '', replacement: '', isRegex: false, caseSensitive: false });
+    setRuleError('');
+  }
+  function toggleUserRule(id) { setUserRules(prev => prev.map(r => (r.id === id ? { ...r, enabled: !r.enabled } : r))); }
+  function deleteUserRule(id) { setUserRules(prev => prev.filter(r => r.id !== id)); }
 
   useEffect(() => { loadDictationRegex(); }, []);
 
@@ -301,16 +325,18 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [lng, dic, per, ac, ch, cd, bw, ct, hist] = await Promise.all([
+      const [lng, dic, per, ac, ch, cd, bw, ct, hist, ur] = await Promise.all([
         loadSetting('transcriptionLanguage', 'de'), loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
         loadSetting('beamWidth', 1), loadSetting('cpuThreads', 4), loadPersistedTranscripts(),
+        loadSetting('userDictationRules', []),
       ]);
       setTranscriptionLanguage(lng); setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
       setBeamWidth(Number(bw) || 1); setCpuThreads(Number(ct) || 4);
       setTranscriptions(Array.isArray(hist) ? hist : []);
+      setUserRules(Array.isArray(ur) ? ur : []);
       setSettingsLoaded(true);
       applyThemeToDom(currentTheme());
     })();
@@ -323,6 +349,7 @@ export default function App() {
   usePersistedSetting('chunkDuration', chunkDuration, settingsLoaded);
   usePersistedSetting('beamWidth', beamWidth, settingsLoaded);
   usePersistedSetting('cpuThreads', cpuThreads, settingsLoaded);
+  usePersistedSetting('userDictationRules', userRules, settingsLoaded);
   useEffect(() => {
     if (!settingsLoaded) return;
     if (persistTranscripts) putTranscripts(transcriptions); else clearTranscriptsDb();
@@ -600,6 +627,31 @@ export default function App() {
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
               <label className="pt-row"><span>{tr('beamLabel')}</span><select value={beamWidth} onChange={e => setBeamWidth(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
+            </fieldset>
+            <fieldset className="pt-fieldset"><legend>{tr('customRules')}</legend>
+              <p className="pt-muted" style={{ marginBottom: 10 }}>{tr('customRulesHint')}</p>
+              {userRules.length === 0 ? <p className="pt-muted">{tr('noRules')}</p> : (
+                <ul className="pt-rulelist">
+                  {userRules.map(r => (
+                    <li key={r.id} className="pt-rule">
+                      <input type="checkbox" checked={r.enabled} onChange={() => toggleUserRule(r.id)} aria-label={tr('dictationOn')} />
+                      <span className="pt-ruletxt"><code>{r.find}</code> → <code>{r.replacement || '␀'}</code></span>
+                      {r.isRegex && <span className="pt-badge">Regex</span>}
+                      {r.caseSensitive && <span className="pt-badge">Aa</span>}
+                      <button className="pt-btn danger" onClick={() => deleteUserRule(r.id)} aria-label={tr('delete')}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="pt-ruleform">
+                <input type="text" value={newRule.find} onChange={e => setNewRule(v => ({ ...v, find: e.target.value }))} placeholder={tr('ruleFind')} aria-label={tr('ruleFind')} />
+                <span aria-hidden="true">→</span>
+                <input type="text" value={newRule.replacement} onChange={e => setNewRule(v => ({ ...v, replacement: e.target.value }))} placeholder={tr('ruleReplace')} aria-label={tr('ruleReplace')} />
+                <label className="pt-inline"><input type="checkbox" checked={newRule.isRegex} onChange={e => setNewRule(v => ({ ...v, isRegex: e.target.checked }))} /> {tr('ruleRegex')}</label>
+                <label className="pt-inline"><input type="checkbox" checked={newRule.caseSensitive} onChange={e => setNewRule(v => ({ ...v, caseSensitive: e.target.checked }))} /> {tr('ruleCase')}</label>
+                <button className="pt-btn" onClick={addUserRule}>{tr('addRule')}</button>
+              </div>
+              {ruleError && <p className="pt-error" role="alert">{ruleError}</p>}
             </fieldset>
             <h3>Interface</h3>
             <label className="pt-row"><span>{tr('langLabel')} (UI)</span>
