@@ -10,7 +10,7 @@ import { resamplePcmTo16k, createLevelMonitor } from './lib/audio.js';
 import { acquireKeepalive, releaseKeepalive } from './lib/keepalive.js';
 import { buildExportJson, buildExportTxt, exportFilename, parseImportJson, mergeEntries, downloadBlob } from './lib/historyIo.js';
 import { applyUserRules, validateRule } from './lib/dictationRules.js';
-import { createSilenceDetector, VAD_THRESHOLDS } from './lib/silenceDetector.js';
+import { createSilenceDetector, VAD_SENSITIVITY } from './lib/silenceDetector.js';
 
 /* ─── IndexedDB: Settings + Transkripte (Schema wie bisher, text-only) ─── */
 const SETTINGS_DB_NAME = 'parakeetweb-settings-db';
@@ -375,7 +375,7 @@ export default function App() {
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
       setVadEnabled(!!vade); setVadSilenceSec(Number(vads) || 5);
-      setVadSensitivity(VAD_THRESHOLDS[vadsens] ? vadsens : 'medium');
+      setVadSensitivity(VAD_SENSITIVITY[vadsens] ? vadsens : 'medium');
       setSettingsLoaded(true);
       applyThemeToDom(currentTheme());
     })();
@@ -509,7 +509,7 @@ export default function App() {
   async function startRecording() {
     if (!modelRef.current) { setError(tr('errNoModel')); return; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
       mediaRef.current = stream.getTracks();
       const ctx = new AudioContext();
       const src = ctx.createMediaStreamSource(stream);
@@ -518,7 +518,7 @@ export default function App() {
       chunksRef.current = [];
       node.port.onmessage = (e) => { if (Array.isArray(e.data)) e.data.forEach(c => chunksRef.current.push(c)); else chunksRef.current.push(e.data); };
       src.connect(node); // not to destination (no feedback)
-      vadRef.current = vadEnabled ? createSilenceDetector({ threshold: VAD_THRESHOLDS[vadSensitivity], silenceSec: Number(vadSilenceSec) }) : null;
+      vadRef.current = vadEnabled ? createSilenceDetector({ sensitivity: vadSensitivity, silenceSec: Number(vadSilenceSec) }) : null;
       setVadSilence(0);
       const monitor = createLevelMonitor(ctx, src, (lv) => {
         setLevel(lv);
