@@ -134,6 +134,11 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-histhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .pt-histhead h2 { margin: 0; margin-right: auto; }
 .pt-histhead .pt-btn { padding: 7px 12px; font-size: .85rem; }
+.pt-histtools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pt-search { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 11px; font-size: .85rem; background: var(--bg-card); color: var(--text); min-width: 190px; }
+.pt-search:focus-visible { border-color: var(--accent); }
+.pt-histcount { display: flex; align-items: center; gap: 10px; color: var(--text-subtle); font-size: .82rem; margin: -4px 0 12px; }
+.pt-histcount .pt-btn { padding: 3px 8px; font-size: .78rem; }
 .pt-export-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .pt-export-options .pt-btn { width: 100%; }
 .pt-empty { color: var(--text-subtle); }

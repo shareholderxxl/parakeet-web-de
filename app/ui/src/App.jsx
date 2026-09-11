@@ -60,6 +60,9 @@ function transcribeErrorMessage(error) {
 function sanitizeClipboardText(s) {
   return String(s ?? '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069\u200b-\u200f]/g, '');
 }
+function normalizeForSearch(s) {
+  return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+}
 async function fetchTextCapped(url, maxBytes = 5_000_000) {
   try {
     const res = await fetch(url);
@@ -112,6 +115,7 @@ const STR = {
     exportFormatHint: 'Die komplette Historie wird in eine Datei exportiert.',
     exportJson: 'JSON-Backup (re-importierbar)', exportTxt: 'Textdatei (.txt, lesbar)',
     exportEntry: 'Als Textdatei speichern', importJson: 'JSON importieren',
+    histSearch: 'Historie durchsuchen', histNoMatch: 'Keine Treffer.', histCount: '{n} von {total} Einträgen', histClear: 'Suche leeren',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -142,6 +146,7 @@ const STR = {
     exportFormatHint: 'The complete history will be exported to a single file.',
     exportJson: 'JSON backup (re-importable)', exportTxt: 'Text file (.txt, readable)',
     exportEntry: 'Save as text file', importJson: 'Import JSON',
+    histSearch: 'Search history', histNoMatch: 'No matches.', histCount: '{n} of {total} entries', histClear: 'Clear search',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -206,6 +211,7 @@ export default function App() {
   // Export/Import + Export-Format-Wahl
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [importPreview, setImportPreview] = useState(null); // validierte Einträge oder null
+  const [historyQuery, setHistoryQuery] = useState('');
   const importInputRef = useRef(null);
   function exportAllAs(fmt) {
     const entries = [...transcriptions].sort((a, b) => a.id - b.id);
@@ -488,6 +494,11 @@ export default function App() {
 
   const preventBlur = (e) => e.preventDefault(); // keep caret in Quill
 
+  const historyNeedle = normalizeForSearch(historyQuery.trim());
+  const visibleTranscriptions = historyNeedle
+    ? transcriptions.filter(t => normalizeForSearch(t.text).includes(historyNeedle))
+    : transcriptions;
+
   return (
     <div className="pt-app">
       <nav className="pt-nav" aria-label="Navigation">
@@ -542,15 +553,26 @@ export default function App() {
         <section className={`pt-history${view !== 'history' ? ' pt-hidden' : ''}`}>
             <div className="pt-histhead">
               <h2>{tr('histTitle')}</h2>
-              {transcriptions.length > 0 && (
-                <button className="pt-btn ghost" onClick={() => setShowExportMenu(true)}>⬇ {tr('exportAll')}</button>
-              )}
-              <button className="pt-btn ghost" onClick={() => importInputRef.current?.click()}>⬆ {tr('importJson')}</button>
-              <input type="file" accept=".json,application/json" hidden ref={importInputRef} onChange={onImportFile} aria-hidden="true" tabIndex={-1} />
+              <div className="pt-histtools">
+                {transcriptions.length > 0 && (
+                  <input type="search" className="pt-search" value={historyQuery} onChange={e => setHistoryQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setHistoryQuery(''); }} placeholder={tr('histSearch')} aria-label={tr('histSearch')} />
+                )}
+                {transcriptions.length > 0 && (
+                  <button className="pt-btn ghost" onClick={() => setShowExportMenu(true)}>⬇ {tr('exportAll')}</button>
+                )}
+                <button className="pt-btn ghost" onClick={() => importInputRef.current?.click()}>⬆ {tr('importJson')}</button>
+                <input type="file" accept=".json,application/json" hidden ref={importInputRef} onChange={onImportFile} aria-hidden="true" tabIndex={-1} />
+              </div>
             </div>
-            {transcriptions.length === 0 ? <p className="pt-empty">{tr('histEmpty')}</p> : (
+            {transcriptions.length > 0 && historyQuery.trim() && (
+              <p className="pt-histcount">
+                <span>{tr('histCount').replace('{n}', String(visibleTranscriptions.length)).replace('{total}', String(transcriptions.length))}</span>
+                <button className="pt-btn ghost" onClick={() => setHistoryQuery('')} aria-label={tr('histClear')}>✕ {tr('histClear')}</button>
+              </p>
+            )}
+            {transcriptions.length === 0 ? <p className="pt-empty">{tr('histEmpty')}</p> : visibleTranscriptions.length === 0 ? <p className="pt-empty">{tr('histNoMatch')}</p> : (
               <ul className="pt-histlist">
-                {transcriptions.map(t => (
+                {visibleTranscriptions.map(t => (
                   <li key={t.id}>
                     <div className="pt-histbody">
                       <div className="pt-histtext">{t.text || ''}</div>
