@@ -159,7 +159,7 @@ const STR = {
     installDesktop: 'Chrome/Edge am Computer: Installations-Symbol in der Adressleiste oder Menü ⋮ → „Seite als App installieren“.',
     installMobile: 'Android: Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“.',
     installHttps: 'Benötigt HTTPS mit gültigem Zertifikat – im LAN ggf. das Zertifikat vertrauen.',
-    licenses: 'Lizenzen & Quellen', close: 'Schließen', theme: 'Design',
+    licenses: 'Lizenzen & Quellen', close: 'Schließen', theme: 'Design', themeLight: 'Hell', themeDark: 'Dunkel', switchLang: 'Sprache wechseln',
     errNoModel: 'Bitte zuerst das Modell laden.', statusRecording: 'Aufnahme läuft…',
   },
   en: {
@@ -204,7 +204,7 @@ const STR = {
     installDesktop: 'Chrome/Edge on desktop: the install icon in the address bar, or menu ⋮ → “Install page as app”.',
     installMobile: 'Android: menu ⋮ → “Install app” / “Add to Home screen”.',
     installHttps: 'Requires HTTPS with a valid certificate — in a LAN, trust the certificate if needed.',
-    licenses: 'Licenses & sources', close: 'Close', theme: 'Theme',
+    licenses: 'Licenses & sources', close: 'Close', theme: 'Theme', themeLight: 'Light', themeDark: 'Dark', switchLang: 'Switch language',
     errNoModel: 'Load the model first.', statusRecording: 'Recording…',
   },
 };
@@ -583,8 +583,11 @@ export default function App() {
         <a href="#settings" className={`pt-navlink ${view === 'settings' ? 'active' : ''}`} aria-current={view === 'settings'} onClick={() => go('settings')}>⚙️ {tr('navSettings')}</a>
         <a href="#about" className={`pt-navlink ${view === 'about' ? 'active' : ''}`} aria-current={view === 'about'} onClick={() => go('about')}>ℹ️ {tr('navAbout')}</a>
         <div className="pt-navfoot">
-          <button className="pt-theme" onClick={() => setThemeAndStore(theme === 'dark' ? 'light' : 'dark')} aria-label={tr('theme')}>
+          <button className="pt-theme" onClick={() => setThemeAndStore(theme === 'dark' ? 'light' : 'dark')} aria-label={tr('theme')} title={tr('theme')}>
             {theme === 'dark' ? '🌙' : '☀️'}
+          </button>
+          <button className="pt-theme" onClick={() => setLang(lang === 'de' ? 'en' : 'de')} aria-label={tr('switchLang')} title={tr('switchLang')}>
+            🌐 {lang.toUpperCase()}
           </button>
         </div>
       </nav>
@@ -661,7 +664,7 @@ export default function App() {
                     </div>
                     <div className="pt-histacts">
                       <button className="pt-btn" onClick={() => { go('input'); setTimeout(() => insertAtCaret(applyDictation(t.text || '')), 60); }}>{tr('insertToEditor')}</button>
-                      <button className="pt-btn ghost" onClick={async () => { try { await navigator.clipboard.writeText(sanitizeClipboardText(t.text || '')); flash(tr('copied')); } catch {} }}>📋</button>
+                      <button className="pt-btn ghost" onClick={async () => { try { await navigator.clipboard.writeText(sanitizeClipboardText(t.text || '')); flash(tr('copied')); } catch {} }} title={tr('copyPlain')} aria-label={tr('copyPlain')}>📋</button>
                       <button className="pt-btn ghost" onClick={() => exportEntry(t)} aria-label={tr('exportEntry')} title={tr('exportEntry')}>⬇</button>
                       <button className="pt-btn danger" onClick={() => setDelTarget(t.id)}>{tr('delete')}</button>
                     </div>
@@ -730,7 +733,7 @@ export default function App() {
             <label className="pt-row"><span>{tr('langLabel')}</span>
               <select value={lang} onChange={e => setLang(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="de">Deutsch</option><option value="en">English</option></select></label>
             <div className="pt-row"><span>{tr('theme')}</span>
-              <button className="pt-btn" onClick={() => setThemeAndStore(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '🌙 Dunkel' : '☀️ Hell'}</button></div>
+              <button className="pt-btn" onClick={() => setThemeAndStore(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '🌙 ' + tr('themeDark') : '☀️ ' + tr('themeLight')}</button></div>
             <label className="pt-row"><span>{tr('cachePersistLabel')}</span>
               <span className="pt-cache">{cachePersist === true ? '✅ ' + tr('cachePersistYes') : cachePersist === false ? '⚠️ ' + tr('cachePersistNo') : tr('cachePersistUnknown')}
                 {cachePersist === false && <button className="pt-btn ghost" onClick={() => requestCachePersist()}>{tr('cachePersistAsk')}</button>}
