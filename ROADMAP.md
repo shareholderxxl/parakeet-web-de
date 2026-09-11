@@ -21,7 +21,7 @@
 | 6 | **Historie-Suche** | Volltextfilter über alle Einträge (relevant mit wachsender Historie). | ✅ umgesetzt (2026-09-11) |
 | 7 | **Auto-Stopp bei Stille (VAD)** | frequenzbasierte Stille-Erkennung, beendet die Aufnahme automatisch (wie in der Desktop-App PortableWhisper). | offen |
 | 8 | **Eigene Diktat-Ersetzungen** | Nutzer-definierte Regeln (z. B. „Komma" → „,") im Settings, ergänzend zur festen CSV aus `dictation-regex/`. | ✅ umgesetzt (2026-09-11) |
-| 9 | **Statistik** | Wörter gesamt, Aufnahmedauer, Ø Sprechgeschwindigkeit; Anreicherung der Settings. | offen |
+| 9 | **Statistik** | Wörter gesamt, Aufnahmedauer, Ø Sprechgeschwindigkeit; Anreicherung der Settings. | ✅ umgesetzt (2026-09-11) — eigener Nav-Reiter, Gesamtzahlen |
 
 ## Nice-to-have
 

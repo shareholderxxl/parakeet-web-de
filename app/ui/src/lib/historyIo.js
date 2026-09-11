@@ -23,7 +23,11 @@ export function buildExportJson(entries) {
     app: 'portabletranscribe',
     version: 1,
     exportedAt: new Date().toISOString(),
-    entries: entries.map(t => ({ id: t.id, text: t.text, timestamp: t.timestamp, wordCount: t.wordCount })),
+    entries: entries.map(t => {
+      const out = { id: t.id, text: t.text, timestamp: t.timestamp, wordCount: t.wordCount };
+      if (Number.isFinite(t.durationSec)) out.durationSec = t.durationSec;
+      return out;
+    }),
   }, null, 2);
 }
 
@@ -38,12 +42,14 @@ export function parseImportJson(jsonText) {
   for (const e of raw) {
     if (!e || typeof e !== 'object' || typeof e.text !== 'string' || !e.text.trim()) return { ok: false, reason: 'entry' };
     const id = Number.isFinite(e.id) ? e.id : nextId++;
-    entries.push({
+    const entry = {
       id,
       text: e.text,
       timestamp: typeof e.timestamp === 'string' && e.timestamp ? e.timestamp : new Date(Number(id)).toLocaleString(),
       wordCount: Number.isFinite(e.wordCount) ? e.wordCount : (e.text.match(/\S+/g) || []).length,
-    });
+    };
+    if (Number.isFinite(e.durationSec) && e.durationSec >= 0) entry.durationSec = e.durationSec;
+    entries.push(entry);
   }
   return { ok: true, entries };
 }

@@ -130,7 +130,7 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-lang select { padding: 8px 12px; font-size: 1.1rem; }
 
 /* ─── Historie ─── */
-.pt-history h2, .pt-settings h2, .pt-about h2 { font-size: 1.4rem; margin-bottom: 14px; text-wrap: balance; }
+.pt-history h2, .pt-settings h2, .pt-about h2, .pt-stats h2 { font-size: 1.4rem; margin-bottom: 14px; text-wrap: balance; }
 .pt-histhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .pt-histhead h2 { margin: 0; margin-right: auto; }
 .pt-histhead .pt-btn { padding: 7px 12px; font-size: .85rem; }
@@ -149,7 +149,14 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-histmeta { color: var(--text-subtle); font-size: .8rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .pt-histacts { display: flex; flex-direction: column; gap: 6px; }
 
-/* ─── Einstellungen ─── */
+/* ─── Statistik ─── */
+.pt-statgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.pt-statcard { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.pt-statnum { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pt-statlabel { color: var(--text-subtle); font-size: .85rem; }
+.pt-statnote { color: var(--text-subtle); font-size: .72rem; line-height: 1.35; margin-top: 2px; }
+
+/* ─── Settings ─── */
 .pt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: .95rem; }
 .pt-row:last-of-type { border-bottom: 0; }
 .pt-fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px 14px; margin: 18px 0; }

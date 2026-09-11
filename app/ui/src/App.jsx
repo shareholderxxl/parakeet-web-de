@@ -35,7 +35,9 @@ function usePersistedSetting(key, value, loaded) {
   useEffect(() => { if (loaded) saveSetting(key, value); }, [key, value, loaded]);
 }
 function slimTranscriptForPersist(t) {
-  return { id: t.id, text: t.text, timestamp: t.timestamp, wordCount: t.wordCount };
+  const out = { id: t.id, text: t.text, timestamp: t.timestamp, wordCount: t.wordCount };
+  if (Number.isFinite(t.durationSec)) out.durationSec = t.durationSec;
+  return out;
 }
 async function loadPersistedTranscripts() {
   try {
@@ -63,6 +65,17 @@ function sanitizeClipboardText(s) {
 }
 function normalizeForSearch(s) {
   return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+}
+function formatDuration(sec) {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  if (h) return `${h} h ${m} min`;
+  if (m) return `${m} min ${r} s`;
+  return `${r} s`;
+}
+function formatDay(ts, lang) {
+  if (!Number.isFinite(ts)) return '—';
+  return new Date(ts).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 async function fetchTextCapped(url, maxBytes = 5_000_000) {
   try {
@@ -121,6 +134,10 @@ const STR = {
     ruleFind: 'Suchen', ruleReplace: 'Ersetzen', ruleRegex: 'Regex', ruleCase: 'Groß/Klein beachten',
     addRule: 'Hinzufügen', ruleEmpty: 'Bitte einen Suchbegriff angeben.', ruleInvalidRegex: 'Ungültiger regulärer Ausdruck.',
     noRules: 'Noch keine eigenen Ersetzungen.',
+    navStats: 'Statistik', statsEmpty: 'Noch keine Daten vorhanden.', words: 'Wörter',
+    statEntries: 'Einträge', statWords: 'Wörter gesamt', statAvg: 'Ø Wörter pro Eintrag',
+    statDuration: 'Aufnahmedauer gesamt', statDurationHint: 'wird erst seit Einführung erfasst – ältere Einträge ohne Dauer',
+    statFirst: 'Ältester Eintrag', statLast: 'Neuester Eintrag',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -156,6 +173,10 @@ const STR = {
     ruleFind: 'Find', ruleReplace: 'Replace with', ruleRegex: 'Regex', ruleCase: 'Case sensitive',
     addRule: 'Add', ruleEmpty: 'Please enter a search term.', ruleInvalidRegex: 'Invalid regular expression.',
     noRules: 'No custom replacements yet.',
+    navStats: 'Statistics', statsEmpty: 'No data yet.', words: 'words',
+    statEntries: 'Entries', statWords: 'Total words', statAvg: 'Avg. words per entry',
+    statDuration: 'Total recording time', statDurationHint: 'recorded only recently – older entries have no duration',
+    statFirst: 'Oldest entry', statLast: 'Newest entry',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -505,7 +526,7 @@ export default function App() {
       }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
       setChunkProg(null);
       let text = res.utterance_text || '';
-      const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length };
+      const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length, durationSec: Math.round(dur * 10) / 10 };
       setTranscriptions(prev => [entry, ...prev]);
       insertAtCaret(applyDictation(text));
       if (autoCopy) { try { await navigator.clipboard.writeText(sanitizeClipboardText(applyDictation(text))); flash(tr('copied')); } catch {} }
@@ -526,12 +547,29 @@ export default function App() {
     ? transcriptions.filter(t => normalizeForSearch(t.text).includes(historyNeedle))
     : transcriptions;
 
+  const stats = (() => {
+    const count = transcriptions.length;
+    const words = transcriptions.reduce((a, t) => a + (Number(t.wordCount) || 0), 0);
+    const withDur = transcriptions.filter(t => Number(t.durationSec) > 0);
+    const totalDur = withDur.reduce((a, t) => a + Number(t.durationSec), 0);
+    const ids = transcriptions.map(t => t.id).filter(Number.isFinite);
+    return {
+      count, words,
+      avg: count ? Math.round(words / count) : 0,
+      totalDur,
+      withDurCount: withDur.length,
+      first: ids.length ? Math.min(...ids) : null,
+      last: ids.length ? Math.max(...ids) : null,
+    };
+  })();
+
   return (
     <div className="pt-app">
       <nav className="pt-nav" aria-label="Navigation">
         <div className="pt-brand">{tr('app')}</div>
         <a href="#input" className={`pt-navlink ${view === 'input' ? 'active' : ''}`} aria-current={view === 'input'} onClick={() => go('input')}>🎤 {tr('navInput')}</a>
         <a href="#history" className={`pt-navlink ${view === 'history' ? 'active' : ''}`} aria-current={view === 'history'} onClick={() => go('history')}>🗂 {tr('navHistory')}</a>
+        <a href="#stats" className={`pt-navlink ${view === 'stats' ? 'active' : ''}`} aria-current={view === 'stats'} onClick={() => go('stats')}>📊 {tr('navStats')}</a>
         <a href="#settings" className={`pt-navlink ${view === 'settings' ? 'active' : ''}`} aria-current={view === 'settings'} onClick={() => go('settings')}>⚙️ {tr('navSettings')}</a>
         <a href="#about" className={`pt-navlink ${view === 'about' ? 'active' : ''}`} aria-current={view === 'about'} onClick={() => go('about')}>ℹ️ {tr('navAbout')}</a>
         <div className="pt-navfoot">
@@ -603,7 +641,7 @@ export default function App() {
                   <li key={t.id}>
                     <div className="pt-histbody">
                       <div className="pt-histtext">{t.text || ''}</div>
-                      <div className="pt-histmeta">{t.timestamp}</div>
+                      <div className="pt-histmeta">{t.timestamp}{Number.isFinite(t.wordCount) ? ` · ${t.wordCount} ${tr('words')}` : ''}</div>
                     </div>
                     <div className="pt-histacts">
                       <button className="pt-btn" onClick={() => { go('input'); setTimeout(() => insertAtCaret(applyDictation(t.text || '')), 60); }}>{tr('insertToEditor')}</button>
@@ -614,6 +652,24 @@ export default function App() {
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+        <section className={`pt-stats${view !== 'stats' ? ' pt-hidden' : ''}`}>
+            <h2>{tr('navStats')}</h2>
+            {stats.count === 0 ? <p className="pt-empty">{tr('statsEmpty')}</p> : (
+              <div className="pt-statgrid">
+                <div className="pt-statcard"><span className="pt-statnum">{stats.count}</span><span className="pt-statlabel">{tr('statEntries')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{stats.words.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span><span className="pt-statlabel">{tr('statWords')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{stats.avg}</span><span className="pt-statlabel">{tr('statAvg')}</span></div>
+                <div className="pt-statcard">
+                  <span className="pt-statnum">{formatDuration(stats.totalDur)}</span>
+                  <span className="pt-statlabel">{tr('statDuration')}</span>
+                  {stats.withDurCount < stats.count && <span className="pt-statnote">{tr('statDurationHint')}</span>}
+                </div>
+                <div className="pt-statcard"><span className="pt-statnum">{formatDay(stats.first, lang)}</span><span className="pt-statlabel">{tr('statFirst')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{formatDay(stats.last, lang)}</span><span className="pt-statlabel">{tr('statLast')}</span></div>
+              </div>
             )}
           </section>
 
