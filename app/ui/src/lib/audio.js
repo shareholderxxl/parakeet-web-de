@@ -28,22 +28,16 @@ export function createLevelMonitor(audioCtx, sourceNode, onLevel) {
   sourceNode.connect(analyser);
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.8;
-  const hasFloat = typeof analyser.getFloatTimeDomainData === 'function';
-  const floatArray = hasFloat ? new Float32Array(analyser.fftSize) : null;
-  const byteArray = hasFloat ? null : new Uint8Array(analyser.fftSize);
+  const dataArray = new Uint8Array(analyser.fftSize);
   let running = true;
   const tick = () => {
+    analyser.getByteTimeDomainData(dataArray);
     let sum = 0;
-    if (hasFloat) {
-      // Float-Zeitdaten: keine 8-Bit-Quantisierung, dadurch deutlich genauer
-      // bei leisen Mikrofonen (RMS bleibt auch im niedrigen Bereich exakt).
-      analyser.getFloatTimeDomainData(floatArray);
-      for (let i = 0; i < floatArray.length; i++) sum += floatArray[i] * floatArray[i];
-    } else {
-      analyser.getByteTimeDomainData(byteArray);
-      for (let i = 0; i < byteArray.length; i++) { const n = (byteArray[i] - 128) / 128; sum += n * n; }
+    for (let i = 0; i < dataArray.length; i++) {
+      const normalized = (dataArray[i] - 128) / 128;
+      sum += normalized * normalized;
     }
-    const rms = Math.sqrt(sum / analyser.fftSize);
+    const rms = Math.sqrt(sum / dataArray.length);
     onLevel(Math.min(100, rms * 250));
     if (running) requestAnimationFrame(tick);
   };
