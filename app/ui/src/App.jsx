@@ -10,6 +10,7 @@ import { resamplePcmTo16k, createLevelMonitor } from './lib/audio.js';
 import { acquireKeepalive, releaseKeepalive } from './lib/keepalive.js';
 import { buildExportJson, buildExportTxt, exportFilename, parseImportJson, mergeEntries, downloadBlob } from './lib/historyIo.js';
 import { applyUserRules, validateRule } from './lib/dictationRules.js';
+import { createSilenceDetector, VAD_THRESHOLDS } from './lib/silenceDetector.js';
 
 /* ─── IndexedDB: Settings + Transkripte (Schema wie bisher, text-only) ─── */
 const SETTINGS_DB_NAME = 'parakeetweb-settings-db';
@@ -138,6 +139,8 @@ const STR = {
     statEntries: 'Einträge', statWords: 'Wörter gesamt', statAvg: 'Ø Wörter pro Eintrag',
     statDuration: 'Aufnahmedauer gesamt', statDurationHint: 'wird erst seit Einführung erfasst – ältere Einträge ohne Dauer',
     statFirst: 'Ältester Eintrag', statLast: 'Neuester Eintrag',
+    vadLabel: 'Auto-Stopp bei Stille', vadDurLabel: 'Stille-Dauer (s)', vadSensLabel: 'Empfindlichkeit',
+    vadSensLow: 'niedrig', vadSensMedium: 'mittel', vadSensHigh: 'hoch', vadSilenceShort: 'Stille',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -177,6 +180,8 @@ const STR = {
     statEntries: 'Entries', statWords: 'Total words', statAvg: 'Avg. words per entry',
     statDuration: 'Total recording time', statDurationHint: 'recorded only recently – older entries have no duration',
     statFirst: 'Oldest entry', statLast: 'Newest entry',
+    vadLabel: 'Auto-stop on silence', vadDurLabel: 'Silence duration (s)', vadSensLabel: 'Sensitivity',
+    vadSensLow: 'low', vadSensMedium: 'medium', vadSensHigh: 'high', vadSilenceShort: 'silence',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -222,6 +227,10 @@ export default function App() {
   const [theme, setTheme] = useState(currentTheme());
   const [showLicenses, setShowLicenses] = useState(false);
   const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
+  const [vadEnabled, setVadEnabled] = useState(false);
+  const [vadSilenceSec, setVadSilenceSec] = useState(5);
+  const [vadSensitivity, setVadSensitivity] = useState('medium');
+  const [vadSilence, setVadSilence] = useState(0); // laufende Stille (nur Anzeige)
 
   // Engine / transcribe state
   const modelRef = useRef(null);
@@ -346,18 +355,21 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [lng, dic, per, ac, ch, cd, bw, ct, hist, ur] = await Promise.all([
+      const [lng, dic, per, ac, ch, cd, bw, ct, hist, ur, vade, vads, vadsens] = await Promise.all([
         loadSetting('transcriptionLanguage', 'de'), loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
         loadSetting('beamWidth', 1), loadSetting('cpuThreads', 4), loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
+        loadSetting('vadEnabled', false), loadSetting('vadSilenceSec', 5), loadSetting('vadSensitivity', 'medium'),
       ]);
       setTranscriptionLanguage(lng); setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
       setBeamWidth(Number(bw) || 1); setCpuThreads(Number(ct) || 4);
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
+      setVadEnabled(!!vade); setVadSilenceSec(Number(vads) || 5);
+      setVadSensitivity(VAD_THRESHOLDS[vadsens] ? vadsens : 'medium');
       setSettingsLoaded(true);
       applyThemeToDom(currentTheme());
     })();
@@ -371,6 +383,9 @@ export default function App() {
   usePersistedSetting('beamWidth', beamWidth, settingsLoaded);
   usePersistedSetting('cpuThreads', cpuThreads, settingsLoaded);
   usePersistedSetting('userDictationRules', userRules, settingsLoaded);
+  usePersistedSetting('vadEnabled', vadEnabled, settingsLoaded);
+  usePersistedSetting('vadSilenceSec', vadSilenceSec, settingsLoaded);
+  usePersistedSetting('vadSensitivity', vadSensitivity, settingsLoaded);
   useEffect(() => {
     if (!settingsLoaded) return;
     if (persistTranscripts) putTranscripts(transcriptions); else clearTranscriptsDb();
@@ -484,6 +499,8 @@ export default function App() {
   const workletRef = useRef(null);
   const chunksRef = useRef([]);
   const rateRef = useRef(48000);
+  const vadRef = useRef(null);
+  const stopRef = useRef(null);
   async function startRecording() {
     if (!modelRef.current) { setError(tr('errNoModel')); return; }
     try {
@@ -496,7 +513,17 @@ export default function App() {
       chunksRef.current = [];
       node.port.onmessage = (e) => { if (Array.isArray(e.data)) e.data.forEach(c => chunksRef.current.push(c)); else chunksRef.current.push(e.data); };
       src.connect(node); // not to destination (no feedback)
-      const monitor = createLevelMonitor(ctx, src, setLevel);
+      vadRef.current = vadEnabled ? createSilenceDetector({ threshold: VAD_THRESHOLDS[vadSensitivity], silenceSec: Number(vadSilenceSec) }) : null;
+      setVadSilence(0);
+      const monitor = createLevelMonitor(ctx, src, (lv) => {
+        setLevel(lv);
+        const d = vadRef.current;
+        if (d) {
+          const r = d.feed(lv, performance.now());
+          setVadSilence(r.silenceSec);
+          if (r.shouldStop) stopRef.current?.();
+        }
+      });
       ctxRef.current = ctx; workletRef.current = node; rateRef.current = ctx.sampleRate;
       node._monitor = monitor;
       setIsRecording(true); setStatus('recording');
@@ -506,6 +533,7 @@ export default function App() {
   async function stopAndTranscribe() {
     if (!isRecording) return;
     setIsRecording(false); setStatus('transcribing');
+    vadRef.current = null; setVadSilence(0);
     try { workletRef.current?.port?.close?.(); } catch {}
     const ctx = ctxRef.current;
     mediaRef.current.forEach(t => t.stop()); mediaRef.current = [];
@@ -541,6 +569,7 @@ export default function App() {
   }
 
   const preventBlur = (e) => e.preventDefault(); // keep caret in Quill
+  stopRef.current = stopAndTranscribe; // aktuelle Referenz für den VAD-Trigger
 
   const historyNeedle = normalizeForSearch(historyQuery.trim());
   const visibleTranscriptions = historyNeedle
@@ -605,6 +634,7 @@ export default function App() {
             </div>
             <div className="pt-recbar">
               <div className="pt-level" style={{ '--v': level }} aria-hidden="true"></div>
+              {isRecording && vadEnabled && <span className="pt-vadinfo" aria-live="off">⏸ {tr('vadSilenceShort')} {vadSilence.toFixed(1)}/{vadSilenceSec} s</span>}
               {status !== 'recording' ? (
                 <button className="pt-btn record" onMouseDown={preventBlur} onClick={(e) => { e.stopPropagation(); if (canRecord) startRecording(); else loadModel(); }}>
                   ● {canRecord ? tr('record') : tr('loadModel')}
@@ -683,6 +713,13 @@ export default function App() {
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
               <label className="pt-row"><span>{tr('beamLabel')}</span><select value={beamWidth} onChange={e => setBeamWidth(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
+              <label className="pt-row"><span>{tr('vadLabel')}</span><input type="checkbox" checked={vadEnabled} onChange={e => setVadEnabled(e.target.checked)} /></label>
+              {vadEnabled && (
+                <>
+                  <label className="pt-row"><span>{tr('vadDurLabel')}</span><input type="number" min="2" max="15" value={vadSilenceSec} onChange={e => setVadSilenceSec(e.target.value)} /></label>
+                  <label className="pt-row"><span>{tr('vadSensLabel')}</span><select value={vadSensitivity} onChange={e => setVadSensitivity(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="low">{tr('vadSensLow')}</option><option value="medium">{tr('vadSensMedium')}</option><option value="high">{tr('vadSensHigh')}</option></select></label>
+                </>
+              )}
             </fieldset>
             <fieldset className="pt-fieldset"><legend>{tr('customRules')}</legend>
               <p className="pt-muted" style={{ marginBottom: 10 }}>{tr('customRulesHint')}</p>

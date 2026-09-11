@@ -127,6 +127,7 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-recbar { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .pt-level { flex: 1; height: 8px; border-radius: 4px; background: var(--bg-subtle); position: relative; overflow: hidden; }
 .pt-level::after { content: ''; position: absolute; inset: 0; transform-origin: left; transform: scaleX(calc(var(--v,0)/100)); background: var(--accent); transition: transform .12s linear; }
+.pt-vadinfo { font-size: .78rem; color: var(--text-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pt-lang select { padding: 8px 12px; font-size: 1.1rem; }
 
 /* ─── Historie ─── */
