@@ -155,6 +155,10 @@ const STR = {
     aboutModel: 'Modell: NVIDIA Parakeet TDT 0.6B v3 (int4, 25 Sprachen inkl. Deutsch).',
     aboutFork: 'Diese App basiert auf / ist ein Fork von „parakeet_web“ (thiswillbeyourgithub).',
     aboutPrivacy: '100 % lokal – kein Konto, kein Tracking, keine Cloud.',
+    installTitle: 'Als App installieren (PWA)',
+    installDesktop: 'Chrome/Edge am Computer: Installations-Symbol in der Adressleiste oder Menü ⋮ → „Seite als App installieren“.',
+    installMobile: 'Android: Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“.',
+    installHttps: 'Benötigt HTTPS mit gültigem Zertifikat – im LAN ggf. das Zertifikat vertrauen.',
     licenses: 'Lizenzen & Quellen', close: 'Schließen', theme: 'Design',
     errNoModel: 'Bitte zuerst das Modell laden.', statusRecording: 'Aufnahme läuft…',
   },
@@ -196,6 +200,10 @@ const STR = {
     aboutModel: 'Model: NVIDIA Parakeet TDT 0.6B v3 (int4, 25 languages incl. German).',
     aboutFork: 'This app is based on / a fork of “parakeet_web” (thiswillbeyourgithub).',
     aboutPrivacy: '100 % local — no account, no tracking, no cloud.',
+    installTitle: 'Install as app (PWA)',
+    installDesktop: 'Chrome/Edge on desktop: the install icon in the address bar, or menu ⋮ → “Install page as app”.',
+    installMobile: 'Android: menu ⋮ → “Install app” / “Add to Home screen”.',
+    installHttps: 'Requires HTTPS with a valid certificate — in a LAN, trust the certificate if needed.',
     licenses: 'Licenses & sources', close: 'Close', theme: 'Theme',
     errNoModel: 'Load the model first.', statusRecording: 'Recording…',
   },
@@ -737,6 +745,14 @@ export default function App() {
             <p className="pt-lock">🔒 {tr('aboutPrivacy')}</p>
             <p className="pt-muted">{tr('aboutModel')}</p>
             <p className="pt-muted">{tr('aboutFork')}</p>
+            <div className="pt-install">
+              <h3>{tr('installTitle')}</h3>
+              <ul>
+                <li>{tr('installDesktop')}</li>
+                <li>{tr('installMobile')}</li>
+              </ul>
+              <p className="pt-muted">{tr('installHttps')}</p>
+            </div>
             <button className="pt-btn ghost" onClick={() => setShowLicenses(s => !s)} aria-expanded={showLicenses}>{tr('licenses')}</button>
             {showLicenses && (
               <div className="pt-licenses">
