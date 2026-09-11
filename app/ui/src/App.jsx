@@ -145,7 +145,8 @@ const STR = {
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
     delete: 'Löschen', delConfirm: 'Dieses Transkript dauerhaft löschen?', yes: 'Löschen', no: 'Abbrechen',
-    micTitle: 'Mikrofon', langLabel: 'Transkriptionssprache', persistLabel: 'Transkripte speichern',
+    micTitle: 'Mikrofon', langLabel: 'Sprache (UI)', persistLabel: 'Transkripte speichern',
+    langAuto: 'Die Transkriptionssprache wird automatisch erkannt (25 Sprachen inkl. Deutsch).',
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', beamLabel: 'Beam-Breite', threadsLabel: 'CPU-Threads',
     resetAll: 'Einstellungen & Verlauf zurücksetzen', resetConfirm: 'Alle Einstellungen und das Verlaufs-Gedächtnis wirklich löschen?',
@@ -186,7 +187,8 @@ const STR = {
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
     delete: 'Delete', delConfirm: 'Permanently delete this transcript?', yes: 'Delete', no: 'Cancel',
-    micTitle: 'Microphone', langLabel: 'Transcription language', persistLabel: 'Save transcripts',
+    micTitle: 'Microphone', langLabel: 'Language (UI)', persistLabel: 'Save transcripts',
+    langAuto: 'The transcription language is detected automatically (25 languages incl. German).',
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', beamLabel: 'Beam width', threadsLabel: 'CPU threads',
     resetAll: 'Reset settings & history', resetConfirm: 'Really delete all settings and transcript history?',
@@ -216,7 +218,6 @@ export default function App() {
 
   // Settings
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [transcriptionLanguage, setTranscriptionLanguage] = useState('de');
   const [dictationEnabled, setDictationEnabled] = useState(true);
   const [persistTranscripts, setPersistTranscripts] = useState(true);
   const [autoCopy, setAutoCopy] = useState(false);
@@ -355,15 +356,15 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [lng, dic, per, ac, ch, cd, bw, ct, hist, ur, vade, vads, vadsens] = await Promise.all([
-        loadSetting('transcriptionLanguage', 'de'), loadSetting('dictationEnabled.v2', true),
+      const [dic, per, ac, ch, cd, bw, ct, hist, ur, vade, vads, vadsens] = await Promise.all([
+        loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
         loadSetting('beamWidth', 1), loadSetting('cpuThreads', 4), loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
         loadSetting('vadEnabled', false), loadSetting('vadSilenceSec', 5), loadSetting('vadSensitivity', 'medium'),
       ]);
-      setTranscriptionLanguage(lng); setDictationEnabled(!!dic); setPersistTranscripts(!!per);
+      setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
       setBeamWidth(Number(bw) || 1); setCpuThreads(Number(ct) || 4);
       setTranscriptions(Array.isArray(hist) ? hist : []);
@@ -374,7 +375,6 @@ export default function App() {
       applyThemeToDom(currentTheme());
     })();
   }, []);
-  usePersistedSetting('transcriptionLanguage', transcriptionLanguage, settingsLoaded);
   usePersistedSetting('dictationEnabled.v2', dictationEnabled, settingsLoaded);
   usePersistedSetting('persistTranscripts', persistTranscripts, settingsLoaded);
   usePersistedSetting('autoCopy', autoCopy, settingsLoaded);
@@ -705,6 +705,7 @@ export default function App() {
 
         <section className={`pt-settings${view !== 'settings' ? ' pt-hidden' : ''}`}>
             <h2>{tr('navSettings')}</h2>
+            <p className="pt-muted" style={{ marginBottom: 10 }}>{tr('langAuto')}</p>
             <label className="pt-row"><span>{tr('dictationOn')}</span><input type="checkbox" checked={dictationEnabled} onChange={e => setDictationEnabled(e.target.checked)} /></label>
             <label className="pt-row"><span>{tr('persistLabel')}</span><input type="checkbox" checked={persistTranscripts} onChange={e => setPersistTranscripts(e.target.checked)} /></label>
             <label className="pt-row"><span>{tr('autoCopyLabel')}</span><input type="checkbox" checked={autoCopy} onChange={e => setAutoCopy(e.target.checked)} /></label>
@@ -747,7 +748,7 @@ export default function App() {
               {ruleError && <p className="pt-error" role="alert">{ruleError}</p>}
             </fieldset>
             <h3>Interface</h3>
-            <label className="pt-row"><span>{tr('langLabel')} (UI)</span>
+            <label className="pt-row"><span>{tr('langLabel')}</span>
               <select value={lang} onChange={e => setLang(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="de">Deutsch</option><option value="en">English</option></select></label>
             <div className="pt-row"><span>{tr('theme')}</span>
               <button className="pt-btn" onClick={() => setThemeAndStore(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '🌙 Dunkel' : '☀️ Hell'}</button></div>

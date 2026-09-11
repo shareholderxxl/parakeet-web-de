@@ -17,7 +17,7 @@
 
 | # | Feature | Beschreibung | Status |
 |---|---------|--------------|--------|
-| 5 | **Sprachauswahl** | v3-Modell beherrscht ~25 europäische Sprachen, genutzt wird nur Deutsch. Dropdown im Settings; Diktat-Regeln bleiben DE-spezifisch. Kleiner Aufwand, großer Zuwachs. | offen |
+| 5 | **Sprachauswahl** | v3-Modell beherrscht ~25 europäische Sprachen, genutzt wird nur Deutsch. Dropdown im Settings; Diktat-Regeln bleiben DE-spezifisch. Kleiner Aufwand, großer Zuwachs. | ✅ erledigt (2026-09-11) — Engine erkennt Sprache automatisch (kein Sprachparameter); toten State entfernt, Hinweis ergänzt |
 | 6 | **Historie-Suche** | Volltextfilter über alle Einträge (relevant mit wachsender Historie). | ✅ umgesetzt (2026-09-11) |
 | 7 | **Auto-Stopp bei Stille (VAD)** | frequenzbasierte Stille-Erkennung, beendet die Aufnahme automatisch (wie in der Desktop-App PortableWhisper). | ✅ umgesetzt (2026-09-11) — Default AUS, 5 s, Empfindlichkeit wählbar |
 | 8 | **Eigene Diktat-Ersetzungen** | Nutzer-definierte Regeln (z. B. „Komma" → „,") im Settings, ergänzend zur festen CSV aus `dictation-regex/`. | ✅ umgesetzt (2026-09-11) |
