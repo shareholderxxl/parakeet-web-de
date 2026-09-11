@@ -143,6 +143,7 @@ const STR = {
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
     delete: 'Löschen', delConfirm: 'Dieses Transkript dauerhaft löschen?', yes: 'Löschen', no: 'Abbrechen',
     micTitle: 'Mikrofon', langLabel: 'Sprache (UI)', persistLabel: 'Transkripte speichern',
+    persistOffWarn: 'Speichern ist deaktiviert – der Verlauf geht beim Neuladen verloren.', persistEnable: 'Aktivieren',
     langAuto: 'Die Transkriptionssprache wird automatisch erkannt (25 Sprachen inkl. Deutsch).',
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', beamLabel: 'Beam-Breite', threadsLabel: 'CPU-Threads',
@@ -183,6 +184,7 @@ const STR = {
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
     delete: 'Delete', delConfirm: 'Permanently delete this transcript?', yes: 'Delete', no: 'Cancel',
     micTitle: 'Microphone', langLabel: 'Language (UI)', persistLabel: 'Save transcripts',
+    persistOffWarn: 'Saving is disabled – history will be lost on reload.', persistEnable: 'Enable',
     langAuto: 'The transcription language is detected automatically (25 languages incl. German).',
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', beamLabel: 'Beam width', threadsLabel: 'CPU threads',
@@ -629,6 +631,12 @@ export default function App() {
                 <input type="file" accept=".json,application/json" hidden ref={importInputRef} onChange={onImportFile} aria-hidden="true" tabIndex={-1} />
               </div>
             </div>
+            {settingsLoaded && !persistTranscripts && (
+              <div className="pt-warn" role="status">
+                <span>⚠️ {tr('persistOffWarn')}</span>
+                <button className="pt-btn" onClick={() => setPersistTranscripts(true)}>{tr('persistEnable')}</button>
+              </div>
+            )}
             {transcriptions.length > 0 && historyQuery.trim() && (
               <p className="pt-histcount">
                 <span>{tr('histCount').replace('{n}', String(visibleTranscriptions.length)).replace('{total}', String(transcriptions.length))}</span>

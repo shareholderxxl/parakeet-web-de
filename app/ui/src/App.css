@@ -139,6 +139,8 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-search:focus-visible { border-color: var(--accent); }
 .pt-histcount { display: flex; align-items: center; gap: 10px; color: var(--text-subtle); font-size: .82rem; margin: -4px 0 12px; }
 .pt-histcount .pt-btn { padding: 3px 8px; font-size: .78rem; }
+.pt-warn { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 14px; border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border)); background: color-mix(in srgb, var(--danger) 8%, var(--bg-card)); border-radius: var(--radius); font-size: .9rem; }
+.pt-warn .pt-btn { padding: 6px 14px; font-size: .85rem; }
 .pt-export-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .pt-export-options .pt-btn { width: 100%; }
 .pt-empty { color: var(--text-subtle); }
