@@ -978,8 +978,18 @@ export async function listLocalRepoFiles(baseUrl) {
   const probe = async (name) => {
     try {
       const res = await fetch(`${baseUrl}/${name}`, { method: 'HEAD' });
-      return res.ok ? name : null;
-    } catch { return null; }
+      if (res.ok) return name;
+      // Definitiv nicht vorhanden -> Kandidat verwerfen.
+      if (res.status === 404 || res.status === 410) return null;
+      // Anderer Status (5xx, Proxy-Fehler): optimistisch annehmen; ein echter
+      // Fehlschlag wird beim Laden klar gemeldet.
+      return name;
+    } catch {
+      // Netzfehler (offline): optimistisch annehmen, damit bei bereits in
+      // IndexedDB gecachten Gewichten der passende Quant gewaehlt bleibt und
+      // das Modell offline aus dem Cache geladen werden kann.
+      return name;
+    }
   };
   // (parakeet-web-de: int4 default; fp32-Shard-Probes entfernt - nur int4/int8
   // Encoder-Kandidaten pruefen, damit resolveModelQuant entscheiden kann)

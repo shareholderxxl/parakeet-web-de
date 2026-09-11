@@ -134,6 +134,66 @@ async function emitAssetIntegrity() {
   console.log(`[postbuild] wrote dist/.well-known/asset-integrity.json (${Object.keys(manifest).length} entries)`);
 }
 
+// Generate dist/precache-manifest.json and bake the file list + version into
+// dist/sw.js. The service worker precaches the app shell so the app works
+// offline; model weights are NOT listed (hub.js caches them in IndexedDB) and
+// ORT/ffmpeg are runtime-cached by the worker on first use. Baking the list
+// into sw.js makes the script bytes change on every build, so the browser's
+// update check reliably sees a new worker.
+async function emitPrecache() {
+  const files = new Set([
+    '/index.html',
+    '/config.js',
+    '/favicon.svg',
+    '/manifest.webmanifest',
+    '/pcm-recorder-worklet.js',
+    '/portabletranscribe-architecture.html',
+    '/.well-known/asset-integrity.json',
+    '/ort/manifest.json',
+  ]);
+  for (const icon of ['icon-192.png', 'icon-512.png', 'maskable-192.png', 'maskable-512.png', 'apple-touch-icon.png']) {
+    files.add(`/icons/${icon}`);
+  }
+  // Hashed JS/CSS referenced by the built HTML, plus any modulepreloads.
+  try {
+    const html = await readFile(join(DIST, 'index.html'), 'utf8');
+    for (const m of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) files.add(m[1]);
+  } catch (_) {}
+  // Dictation rules (small, fetched at boot).
+  try {
+    const dir = join(DIST, 'dictation-regex');
+    for (const name of await readdir(dir)) files.add(`/dictation-regex/${name}`);
+  } catch (_) {}
+
+  const list = [...files].sort();
+  const hash = createHash('sha256');
+  for (const url of list) {
+    hash.update(url);
+    try { hash.update(await readFile(join(DIST, url.replace(/^\//, '')))); } catch (_) {}
+  }
+  const version = hash.digest('hex').slice(0, 16);
+
+  await writeFile(join(DIST, 'precache-manifest.json'), JSON.stringify({ version, files: list }, null, 2) + '\n', 'utf8');
+  console.log(`[postbuild] wrote dist/precache-manifest.json (${list.length} files, v${version})`);
+
+  // Bake into the copied service worker. Match the assignment lines
+  // specifically: the tokens also appear in a comment, so a plain string
+  // replace would hit the comment first and leave the code untouched.
+  const swPath = join(DIST, 'sw.js');
+  try {
+    let sw = await readFile(swPath, 'utf8');
+    sw = sw
+      .replace(/const BUILD_VERSION = '[^']*';/, `const BUILD_VERSION = '${version}';`)
+      .replace(/const PRECACHE = [^;]*;/, `const PRECACHE = ${JSON.stringify(list)};`);
+    await writeFile(swPath, sw, 'utf8');
+    const check = await readFile(swPath, 'utf8');
+    const bakedOk = check.includes(`'${version}'`) && !/const PRECACHE = __PRECACHE__/.test(check);
+    console.log(`[postbuild] baked precache + version into dist/sw.js (verify: ${bakedOk ? 'ok' : 'MISMATCH'})`);
+  } catch (e) {
+    console.warn('[postbuild] could not bake sw.js (copy present?):', e.message);
+  }
+}
+
 async function main() {
   const entries = await readdir(DIST, { withFileTypes: true });
   const htmls = entries.filter(e => e.isFile() && e.name.endsWith('.html')).map(e => join(DIST, e.name));
@@ -144,6 +204,7 @@ async function main() {
   for (const h of htmls) await processHtml(h);
   await emitOrtManifest();
   await emitAssetIntegrity();
+  await emitPrecache();
 }
 
 // Run only when invoked as a script (node postbuild.mjs), so importing this

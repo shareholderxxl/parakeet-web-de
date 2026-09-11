@@ -84,3 +84,14 @@ if (analyticsUrl && analyticsWebsiteId) {
 
 const root = createRoot(document.getElementById('root'));
 root.render(<I18nProvider><App /></I18nProvider>);
+
+// PWA: Service Worker registrieren (nur Produktions-Build). Updates greifen
+// still beim nächsten Neuladen (Navigation ist network-first; das Autosave
+// schützt den Editor-Inhalt).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((e) => {
+      console.warn('[SW] registration failed:', e && e.message);
+    });
+  });
+}

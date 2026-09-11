@@ -31,6 +31,7 @@ MIME = {
     ".mjs": "application/javascript",
     ".css": "text/css",
     ".json": "application/json",
+    ".webmanifest": "application/manifest+json",
     ".wasm": "application/wasm",
     ".onnx": "application/octet-stream",
     ".csv": "text/csv; charset=utf-8",
@@ -63,10 +64,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return MIME.get(ext, "application/octet-stream")
 
     def end_headers(self):
-        # COOP/COEP wie beim Original (SharedArrayBuffer für Worker-Threads)
+        # COOP/COEP wie beim Original (SharedArrayBuffer für Worker-Threads).
+        # Cache-Control durchgaengig no-cache: der Service Worker haelt Shell,
+        # ORT/ffmpeg (Runtime-Cache) und die Modell-Dateien (pt-models) offline.
+        self.send_header("Cache-Control", "no-cache")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
-        self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
 

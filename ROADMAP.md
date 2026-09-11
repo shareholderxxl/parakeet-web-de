@@ -11,7 +11,7 @@
 | 1 | **Audio-/Video-Datei-Transkription** | Aufnahmen (Meetings, Voice-Memos) hochladen statt nur Mikrofon; `ffmpeg-core.wasm` ist bereits gebundelt (`public/ffmpeg`) → Dekodierung zu PCM 16 kHz, Transcribe-Pfad existiert. Größter Funktionsgewinn, moderater Aufwand. | offen |
 | 2 | **Editor-Autosave** | Aktueller Editor-Inhalt (Quill-Delta) in IndexedDB persistieren (Debounce + Flush bei Tab-Wechsel); Wiederherstellung nach Reload mit Toast. Schließt Datenverlust bei Reload/Absturz. | ✅ umgesetzt (2026-09-09) |
 | 3 | **Export & Backup** | Eintrags-Export als `.txt`; komplette Historie in **einer** Datei exportieren — Format wählbar (JSON-Backup re-importierbar / `.txt` lesbar); Import mit Validierung + Bestätigungs-Modal, Merge mit ID-Dedupe. Passt zum „Daten liegen bei dir"-Versprechen. | ✅ umgesetzt (2026-09-09) |
-| 4 | **PWA (installierbar + offline)** | Service Worker + Manifest; App-Shell und Modell sind lokal gecached → startet ohne Netz wie eine Desktop-App, insbesondere auf Mobilgeräten. | offen |
+| 4 | **PWA (installierbar + offline)** | Service Worker + Manifest; App-Shell und Modell sind lokal gecached → startet ohne Netz wie eine Desktop-App, insbesondere auf Mobilgeräten. | ✅ umgesetzt (2026-09-11) — Manifest/Icons, SW (Shell-Precache, ORT/ffmpeg-Runtime-Cache, `/models/` in Cache Storage), hub.js offline-tolerant; SW nur mit gültigem HTTPS (LAN self-signed blockt) |
 
 ## Nützlich
 
