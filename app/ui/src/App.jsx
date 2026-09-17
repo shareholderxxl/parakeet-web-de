@@ -146,7 +146,11 @@ const STR = {
     persistOffWarn: 'Speichern ist deaktiviert – der Verlauf geht beim Neuladen verloren.', persistEnable: 'Aktivieren',
     langAuto: 'Die Transkriptionssprache wird automatisch erkannt (25 Sprachen inkl. Deutsch).',
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
-    chunkDurLabel: 'Segmentlänge (s)', beamLabel: 'Beam-Breite', threadsLabel: 'CPU-Threads',
+    chunkDurLabel: 'Segmentlänge (s)', threadsLabel: 'CPU-Threads',
+    gpuLabel: 'GPU (WebGPU) verwenden', gpuActive: 'GPU-Backend aktiv',
+    gpuHint: 'Experimentell: Der Encoder läuft auf der GPU, der Decoder auf der CPU. Bei Fehlern automatischer CPU-Fallback; Perf-Logs erscheinen in der Konsole.',
+    gpuUnavailable: 'WebGPU ist in diesem Browser/Gerät nicht verfügbar.',
+    gpuFallback: 'WebGPU fehlgeschlagen – CPU-Backend aktiv.',
     resetAll: 'Einstellungen & Verlauf zurücksetzen', resetConfirm: 'Alle Einstellungen und das Verlaufs-Gedächtnis wirklich löschen?',
     cachePersistLabel: 'Modell-Cache', cachePersistYes: 'dauerhaft gespeichert',
     cachePersistNo: 'nur best effort – kann unter Speicherdruck entfernt werden',
@@ -191,7 +195,11 @@ const STR = {
     persistOffWarn: 'Saving is disabled – history will be lost on reload.', persistEnable: 'Enable',
     langAuto: 'The transcription language is detected automatically (25 languages incl. German).',
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
-    chunkDurLabel: 'Chunk length (s)', beamLabel: 'Beam width', threadsLabel: 'CPU threads',
+    chunkDurLabel: 'Chunk length (s)', threadsLabel: 'CPU threads',
+    gpuLabel: 'Use GPU (WebGPU)', gpuActive: 'GPU backend active',
+    gpuHint: 'Experimental: the encoder runs on the GPU, the decoder on the CPU. Automatic CPU fallback on failure; perf logs appear in the console.',
+    gpuUnavailable: 'WebGPU is not available in this browser/device.',
+    gpuFallback: 'WebGPU failed – CPU backend active.',
     resetAll: 'Reset settings & history', resetConfirm: 'Really delete all settings and transcript history?',
     cachePersistLabel: 'Model cache', cachePersistYes: 'persistently stored',
     cachePersistNo: 'best effort only – may be evicted under storage pressure',
@@ -228,11 +236,14 @@ export default function App() {
   const [autoCopy, setAutoCopy] = useState(false);
   const [enableChunking, setEnableChunking] = useState(true);
   const [chunkDuration, setChunkDuration] = useState(60);
-  const [beamWidth, setBeamWidth] = useState(1);
   const [cpuThreads, setCpuThreads] = useState(4);
   const [theme, setTheme] = useState(currentTheme());
   const [showLicenses, setShowLicenses] = useState(false);
   const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
+  const [useWebGPU, setUseWebGPU] = useState(false); // experimentell, Default AUS
+  const [gpuFallback, setGpuFallback] = useState(false); // WebGPU fehlgeschlagen -> CPU aktiv
+  const [webgpuAdapter, setWebgpuAdapter] = useState(undefined); // undefined=unbekannt, true/false
+  const webgpuAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator;
 
   // Engine / transcribe state
   const modelRef = useRef(null);
@@ -354,21 +365,38 @@ export default function App() {
     })();
   }, []);
 
+  // WebGPU-Verfügbarkeit real prüfen (navigator.gpu kann existieren, aber ohne
+  // Adapter nutzlos sein — ORT entfernt die EP sonst still).
+  useEffect(() => {
+    if (!webgpuAvailable) { setWebgpuAdapter(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!cancelled) setWebgpuAdapter(!!adapter);
+      } catch { if (!cancelled) setWebgpuAdapter(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [webgpuAvailable]);
+
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [dic, per, ac, ch, cd, bw, ct, hist, ur] = await Promise.all([
+      const [dic, per, ac, ch, cd, ct, hist, ur, gpu] = await Promise.all([
         loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
-        loadSetting('beamWidth', 1), loadSetting('cpuThreads', 4), loadPersistedTranscripts(),
+        loadSetting('cpuThreads', 4),
+        loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
+        loadSetting('useWebGPU', false),
       ]);
       setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
-      setBeamWidth(Number(bw) || 1); setCpuThreads(Number(ct) || 4);
+      setCpuThreads(Number(ct) || 4);
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
+      setUseWebGPU(!!gpu);
       setSettingsLoaded(true);
       applyThemeToDom(currentTheme());
     })();
@@ -378,8 +406,8 @@ export default function App() {
   usePersistedSetting('autoCopy', autoCopy, settingsLoaded);
   usePersistedSetting('enableChunking', enableChunking, settingsLoaded);
   usePersistedSetting('chunkDuration', chunkDuration, settingsLoaded);
-  usePersistedSetting('beamWidth', beamWidth, settingsLoaded);
   usePersistedSetting('cpuThreads', cpuThreads, settingsLoaded);
+  usePersistedSetting('useWebGPU', useWebGPU, settingsLoaded);
   usePersistedSetting('userDictationRules', userRules, settingsLoaded);
   useEffect(() => {
     if (!settingsLoaded) return;
@@ -466,24 +494,34 @@ export default function App() {
 
   /* ─── Modell laden ─── */
   const repoId = CONFIG.VITE_MODEL_REPO || 'efederici/parakeet-tdt-0.6b-v3-onnx-int4';
-  async function loadModel() {
+  async function loadModel(backendOverride) {
+    const wantGpu = useWebGPU && webgpuAvailable && webgpuAdapter !== false;
+    const backend = (typeof backendOverride === 'string' && backendOverride) || (wantGpu ? 'webgpu-hybrid' : 'wasm');
     setStatus('loading'); setError(null);
     try {
       const progress = () => {};
       const modelUrls = await getParakeetModel(repoId, {
         encoderQuant: 'int4', decoderQuant: 'int8', preprocessor: 'js',
-        backend: 'wasm', cpuThreads: Number(cpuThreads), progress,
+        backend, cpuThreads: Number(cpuThreads), progress,
         localFallbackBaseUrl: '/models',
         ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
       });
       const nMels = modelUrls.modelConfig?.featuresSize || 128;
       modelRef.current = await ParakeetModel.fromUrls({
-        ...modelUrls.urls, filenames: modelUrls.filenames, backend: 'wasm',
+        ...modelUrls.urls, filenames: modelUrls.filenames, backend,
         cpuThreads: Number(cpuThreads), preprocessorBackend: modelUrls.preprocessorBackend, nMels,
       });
       setStatus('ready'); setCanRecord(true);
+      if (backend !== 'wasm') flash(tr('gpuActive'));
       requestCachePersist();
     } catch (e) {
+      // Variante 1: WebGPU-Fehler -> einmaliger Auto-Retry auf WASM, Toggle
+      // bleibt an, Status weist auf den Fallback hin.
+      if (backend !== 'wasm') {
+        console.warn('[loadModel] WebGPU failed, falling back to WASM:', e);
+        setGpuFallback(true);
+        return loadModel('wasm');
+      }
       console.error('[loadModel]', e); setError(transcribeErrorMessage(e)); setStatus('error');
     }
   }
@@ -532,7 +570,7 @@ export default function App() {
       setChunkProg({ n: 0, total: 1 });
       const res = await modelRef.current.transcribeChunked(audio16, 16000, {
         enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
-        returnTimestamps: true, temperature: 0, beamWidth: Number(beamWidth), frameStride: 8, enableProfiling: false,
+        returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: !!useWebGPU,
       }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
       setChunkProg(null);
       let text = res.utterance_text || '';
@@ -597,11 +635,11 @@ export default function App() {
           <span className={`dot ${status}`} aria-hidden="true"></span>
           <span>{status === 'ready' || status === 'recording' ? tr('modelReady') : status === 'error' ? (error || tr('loadModel')) : status === 'loading' ? tr('loadingModel') : status === 'transcribing' ? tr('transcribing') + (chunkProg && chunkProg.total > 1 ? ` (${chunkProg.n}/${chunkProg.total})` : '') : ''} </span>
           {status !== 'ready' && status !== 'recording' && status !== 'transcribing' && status !== 'error' && (
-            <button className="pt-btn primary" style={{ marginLeft: 'auto' }} onClick={loadModel} disabled={status === 'loading'}>
+            <button className="pt-btn primary" style={{ marginLeft: 'auto' }} onClick={() => loadModel()} disabled={status === 'loading'}>
               {status === 'loading' ? tr('loadingModel') : tr('loadModel')}
             </button>
           )}
-          {status === 'error' && <button className="pt-btn" style={{ marginLeft: 'auto' }} onClick={loadModel}>{tr('loadModel')}</button>}
+          {status === 'error' && <button className="pt-btn" style={{ marginLeft: 'auto' }} onClick={() => loadModel()}>{tr('loadModel')}</button>}
         </header>
 
         <section className={`pt-input${view !== 'input' ? ' pt-hidden' : ''}`}>
@@ -701,8 +739,10 @@ export default function App() {
             <fieldset className="pt-fieldset"><legend>{tr('advanced')}</legend>
               <label className="pt-row"><span>{tr('chunkLabel')}</span><input type="checkbox" checked={enableChunking} onChange={e => setEnableChunking(e.target.checked)} /></label>
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
-              <label className="pt-row"><span>{tr('beamLabel')}</span><select value={beamWidth} onChange={e => setBeamWidth(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
+              <label className="pt-row"><span>{tr('gpuLabel')}</span><input type="checkbox" checked={useWebGPU} onChange={e => { setUseWebGPU(e.target.checked); setGpuFallback(false); }} /></label>
+              <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{(webgpuAvailable && webgpuAdapter !== false) ? tr('gpuHint') : tr('gpuUnavailable')}</p>
+              {gpuFallback && <p className="pt-error" role="status">{tr('gpuFallback')}</p>}
             </fieldset>
             <fieldset className="pt-fieldset"><legend>{tr('customRules')}</legend>
               <p className="pt-muted" style={{ marginBottom: 10 }}>{tr('customRulesHint')}</p>

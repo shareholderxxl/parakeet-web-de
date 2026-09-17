@@ -22,6 +22,7 @@
 | 7 | **Auto-Stopp bei Stille (VAD)** | frequenzbasierte Stille-Erkennung, beendet die Aufnahme automatisch (wie in der Desktop-App PortableWhisper). | offen — erster Ansatz (2026-09-11) wieder entfernt, funktionierte nicht zuverlässig |
 | 8 | **Eigene Diktat-Ersetzungen** | Nutzer-definierte Regeln (z. B. „Komma" → „,") im Settings, ergänzend zur festen CSV aus `dictation-regex/`. | ✅ umgesetzt (2026-09-11) |
 | 9 | **Statistik** | Wörter gesamt, Aufnahmedauer, Ø Sprechgeschwindigkeit; Anreicherung der Settings. | ✅ umgesetzt (2026-09-11) — eigener Nav-Reiter, Gesamtzahlen |
+| 15 | **WebGPU int4 (experimentell)** | GPU-Beschleunigung im Browser: int4-Encoder via MatMulNBits auf WebGPU, int8-Decoder im WASM-Hybrid. Setting „GPU (WebGPU) verwenden", **Default AUS**, automatischer CPU-Fallback. | ✅ umgesetzt (2026-09-14) — Resolver öffnet int4 für WebGPU; Messung/Verifikation auf realer GPU offen |
 
 ## Nice-to-have
 

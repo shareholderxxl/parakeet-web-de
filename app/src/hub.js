@@ -991,12 +991,10 @@ export async function listLocalRepoFiles(baseUrl) {
       return name;
     }
   };
-  // (parakeet-web-de: int4 default; fp32-Shard-Probes entfernt - nur int4/int8
-  // Encoder-Kandidaten pruefen, damit resolveModelQuant entscheiden kann)
+  // (parakeet-web-de: App fixiert int4 - die Sonde prueft nur noch diesen
+  // Encoder, damit resolveModelQuant die Verfuegbarkeit entscheiden kann)
   const candidates = [
     'encoder-model.int4.onnx',
-    'encoder-model.int8.onnx',
-    'encoder-model.int8.lite.onnx',
   ];
   return (await Promise.all(candidates.map(probe))).filter(Boolean);
 }
@@ -1138,6 +1136,19 @@ export function resolveModelQuant({ backend, encoderQuant, decoderQuant, repoFil
       pinnedToInt8: encoderQuant === 'int4' ? false : (encoderQuant !== 'int8' || decoderQuant !== 'int8'),
     };
   }
+  // (parakeet-web-de) int4 ist auf WebGPU moeglich: die WebGPU-EP unterstuetzt
+  // MatMulNBits (int4) — im Gegensatz zu int8. Der efederici int4-Encoder ist
+  // klein (391 MB) und GPU-tauglich; der int8-Decoder bleibt im Hybrid-Modus auf
+  // WASM (parakeet.js erzwingt das fuer webgpu-*). fp32 bleibt der Fallback fuer
+  // andere Encoder-Wuensche.
+  if (encoderQuant === 'int4' && decoderQuant === 'int8' && hasInt4Encoder(repoFiles)) {
+    return {
+      encoderQ: 'int4',
+      decoderQ: 'int8',
+      pinnedToInt8: false,
+      webgpuFp32NeedsShards: false,
+    };
+  }
   // fp32 is the only encoder precision the GPU path has. The model repo shipped
   // an fp16 encoder until 2026-08-23 and this resolved to it when the adapter
   // exposed `shader-f16`; that build was withdrawn because fp16 compute exists
@@ -1146,7 +1157,7 @@ export function resolveModelQuant({ backend, encoderQuant, decoderQuant, repoFil
   // fp32 (there is no GPU int8 encoder kernel either, for the lite build as much
   // as the default), and the decoder is always int8: it is as accurate as fp32 on
   // this model while being smaller and faster.
-  const encoderQ = isInt8Encoder(encoderQuant) ? 'fp32' : encoderQuant;
+  const encoderQ = (encoderQuant === 'int4' || isInt8Encoder(encoderQuant)) ? 'fp32' : encoderQuant;
   const decoderQ = 'int8';
   // A single-file fp32 encoder cannot load on WebGPU: the ~2.3 GB weights exceed
   // BOTH Chromium's ~2 GB IndexedDB Blob-readback wall AND V8's ArrayBuffer cap,
