@@ -88,10 +88,24 @@ root.render(<I18nProvider><App /></I18nProvider>);
 // PWA: Service Worker registrieren (nur Produktions-Build). Updates greifen
 // still beim nächsten Neuladen (Navigation ist network-first; das Autosave
 // schützt den Editor-Inhalt).
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+//
+// Nicht auf IP-Literal-Hosts registrieren: dort läuft die App üblicherweise im
+// LAN mit selbstsigniertem Zertifikat, und der Browser blockiert den
+// SW-Skript-Fetch hart (Zertifikatsfehler) – das würde nur eine Fehlerzeile in
+// der Konsole erzeugen. PWA/Offline gibt es auf Hosts mit gültigem TLS (echte
+// Domain); localhost bleibt für die Entwicklung erlaubt.
+function isIpLiteralHost(hostname) {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':');
+}
+if (
+  import.meta.env.PROD &&
+  'serviceWorker' in navigator &&
+  location.protocol === 'https:' &&
+  !isIpLiteralHost(location.hostname)
+) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((e) => {
-      console.warn('[SW] registration failed:', e && e.message);
+      console.debug('[SW] registration failed:', e && e.message);
     });
   });
 }
