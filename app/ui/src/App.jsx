@@ -154,6 +154,7 @@ const STR = {
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', threadsLabel: 'CPU-Threads',
     gpuLabel: 'GPU (WebGPU) verwenden', gpuActive: 'GPU-Backend aktiv',
+    gpuInt4Note: 'WebGPU nutzt immer den int4-Encoder (int8 laeuft nur auf CPU).',
     encQuantLabel: 'Encoder-Quantisierung', encQuantHint: 'int4 = kleiner (391 MB), int8 = groesser (~880 MB), auf CPU/WASM oft deutlich schneller. Aenderung greift nach erneutem Modellladen.',
     gpuHint: 'Experimentell: Der Encoder läuft auf der GPU, der Decoder auf der CPU. Bei Fehlern automatischer CPU-Fallback; Perf-Logs erscheinen in der Konsole.',
     gpuUnavailable: 'WebGPU ist in diesem Browser/Gerät nicht verfügbar.',
@@ -210,6 +211,7 @@ const STR = {
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', threadsLabel: 'CPU threads',
     gpuLabel: 'Use GPU (WebGPU)', gpuActive: 'GPU backend active',
+    gpuInt4Note: 'WebGPU always uses the int4 encoder (int8 runs on CPU only).',
     encQuantLabel: 'Encoder quantization', encQuantHint: 'int4 = smaller (391 MB), int8 = larger (~880 MB), often much faster on CPU/WASM. Change applies after reloading the model.',
     gpuHint: 'Experimental: the encoder runs on the GPU, the decoder on the CPU. Automatic CPU fallback on failure; perf logs appear in the console.',
     gpuUnavailable: 'WebGPU is not available in this browser/device.',
@@ -517,6 +519,9 @@ export default function App() {
   async function loadModel(backendOverride) {
     const wantGpu = useWebGPU && webgpuAvailable && webgpuAdapter !== false;
     const backend = (typeof backendOverride === 'string' && backendOverride) || (wantGpu ? 'webgpu-hybrid' : 'wasm');
+    // WebGPU kann nur den int4-Encoder (MatMulNBits); int8 wuerde auf fp32
+    // aufgestuft und scheitert an fehlenden Shards -> fuer GPU immer int4.
+    const effEncoderQuant = wantGpu ? 'int4' : encoderQuant;
     setStatus('loading'); setError(null);
     try {
       const progress = () => {};
@@ -525,7 +530,7 @@ export default function App() {
       // sonst probt die Engine zuerst /models und faellt dann auf int8 zurueck.
       const modelSource = CONFIG.VITE_MODEL_SOURCE || 'local';
       const modelUrls = await getParakeetModel(repoId, {
-        encoderQuant, decoderQuant: 'int8', preprocessor: 'js',
+        encoderQuant: effEncoderQuant, decoderQuant: 'int8', preprocessor: 'js',
         backend, cpuThreads: Number(cpuThreads), progress,
         ...(modelSource === 'local'
           ? { localFallbackBaseUrl: '/models' }
@@ -534,7 +539,7 @@ export default function App() {
           // den Speicherbedarf; offline liefert der SW aus dem Cache.
           : { skipIdbCache: true }),
         // Optionaler separater Encoder (nur wenn int8 gewaehlt und konfiguriert).
-        ...(encoderQuant === 'int8' && CONFIG.VITE_MODEL_ENCODER_REPO ? {
+        ...(effEncoderQuant === 'int8' && CONFIG.VITE_MODEL_ENCODER_REPO ? {
           encoderRepoId: CONFIG.VITE_MODEL_ENCODER_REPO,
           ...(CONFIG.VITE_MODEL_ENCODER_REVISION ? { encoderRevision: CONFIG.VITE_MODEL_ENCODER_REVISION } : {}),
           ...(CONFIG.VITE_MODEL_ENCODER_SUBFOLDER ? { encoderSubfolder: CONFIG.VITE_MODEL_ENCODER_SUBFOLDER } : {}),
@@ -857,6 +862,7 @@ export default function App() {
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('threadsHint')}</p>
               <label className="pt-row"><span>{tr('gpuLabel')}</span><input type="checkbox" checked={useWebGPU} onChange={e => { setUseWebGPU(e.target.checked); setGpuFallback(false); }} /></label>
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{(webgpuAvailable && webgpuAdapter !== false) ? tr('gpuHint') : tr('gpuUnavailable')}</p>
+              {useWebGPU && <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('gpuInt4Note')}</p>}
               {gpuFallback && <p className="pt-error" role="status">{tr('gpuFallback')}</p>}
             </fieldset>
             <fieldset className="pt-fieldset"><legend>{tr('customRules')}</legend>
