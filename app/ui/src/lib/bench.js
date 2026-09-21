@@ -181,13 +181,104 @@ export function profile() {
   return window.__ptProfile || null;
 }
 
+const RUN_KEY = 'ptBenchRun';
+
+function mean(runs, field) {
+  const vals = runs.map(r => Number(r[field])).filter(Number.isFinite);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+function finishMatrix(rows) {
+  const valid = rows.filter(r => r.valid);
+  console.log('[bench] === matrix done ===');
+  console.table(rows.map(r => ({
+    quant: r.encoderQuant, threads: r.cpuThreads, ortThreads: r.ortThreads ?? '—', valid: r.valid,
+    encode_ms: r.encodeMs ? Math.round(r.encodeMs) : '—', rtf: r.rtf ? +r.rtf.toFixed(2) : '—', error: r.error || '',
+  })));
+  for (const q of [...new Set(valid.map(r => r.encoderQuant))]) {
+    const of = valid.filter(r => r.encoderQuant === q).sort((a, b) => a.cpuThreads - b.cpuThreads);
+    if (!of.length) continue;
+    console.log(`${q}: ` + of.map(r => `${r.cpuThreads}t=${Math.round(r.encodeMs)}ms`).join('  '));
+    for (const r of of.slice(1)) if (r.encodeMs && of[0].encodeMs) console.log(`   ${of[0].cpuThreads}t → ${r.cpuThreads}t: ${(of[0].encodeMs / r.encodeMs).toFixed(2)}×`);
+  }
+  const json = JSON.stringify({ generatedAt: new Date().toISOString(), env: { hardwareConcurrency: navigator.hardwareConcurrency, userAgent: navigator.userAgent }, rows }, null, 2);
+  try { navigator.clipboard?.writeText(json); console.log('[bench] JSON in die Zwischenablage kopiert (sonst aus __ptLastMatrix).'); } catch { /* ignore */ }
+  window.__ptLastMatrix = rows;
+  return rows;
+}
+
+/**
+ * Run the full quant × threads matrix from the DevTools console — no install
+ * needed. Each config needs a FRESH page (ORT memoizes initializeWebAssembly),
+ * so the runner persists its state in localStorage, applies a config, reloads,
+ * measures, and repeats; it finishes with a console.table + clipboard JSON.
+ *
+ *   await __ptBench.runMatrix({ quants:['int4','int8'], threads:[1,2,4], runs:3 })
+ *
+ * @param {Object} opts
+ * @param {string[]} [opts.quants=['int4']]
+ * @param {number[]} [opts.threads=[1,2,4]]
+ * @param {number}   [opts.runs=3]
+ * @param {number}   [opts.durationSec=20] Synthetic audio length (or pass url).
+ * @param {string}   [opts.url=null]
+ * @param {boolean}  [opts.profile=false]
+ */
+export function runMatrix(opts = {}) {
+  const { quants = ['int4'], threads = [1, 2, 4], runs = 3, durationSec = 20, url = null, profile = false } = opts;
+  const plan = [];
+  for (const q of quants) for (const t of threads) plan.push({ encoderQuant: q, cpuThreads: Number(t) });
+  localStorage.setItem(RUN_KEY, JSON.stringify({ plan, idx: 0, phase: 'apply', rows: [], opts: { runs, durationSec, url, profile } }));
+  console.log(`[bench] matrix: ${plan.length} configs (${plan.map(c => `${c.encoderQuant}/${c.cpuThreads}t`).join(', ')}) — die Seite lädt pro Config neu.`);
+  return resumeMatrix();
+}
+
+/** Resume/continue an in-progress matrix run (called automatically on install). */
+export async function resumeMatrix() {
+  let state = null;
+  try { state = JSON.parse(localStorage.getItem(RUN_KEY) || 'null'); } catch { /* ignore */ }
+  if (!state || !Array.isArray(state.plan)) return null;
+  const { plan, idx, phase, rows, opts } = state;
+  if (idx >= plan.length) { localStorage.removeItem(RUN_KEY); return finishMatrix(rows); }
+  const cfg = plan[idx];
+  if (phase === 'apply') {
+    await writeSetting('encoderQuant', cfg.encoderQuant);
+    await writeSetting('cpuThreads', cfg.cpuThreads);
+    state.phase = 'measure';
+    localStorage.setItem(RUN_KEY, JSON.stringify(state));
+    console.log(`[bench] (${idx + 1}/${plan.length}) setze ${cfg.encoderQuant} × ${cfg.cpuThreads}t — Seite lädt neu …`);
+    location.reload();
+    return null;
+  }
+  console.log(`[bench] (${idx + 1}/${plan.length}) messe ${cfg.encoderQuant} × ${cfg.cpuThreads}t …`);
+  try {
+    const res = await measure({
+      url: opts.url, durationSec: opts.durationSec, runs: opts.runs,
+      encoderQuant: cfg.encoderQuant, cpuThreads: cfg.cpuThreads, enableProfiling: opts.profile,
+    });
+    const audioSec = mean(res.runs, 'audioSec');
+    const totalMs = mean(res.runs, 'total_ms');
+    rows.push({
+      ...cfg, valid: res.env.ortWasmThreads === cfg.cpuThreads, ortThreads: res.env.ortWasmThreads,
+      audioSec, encodeMs: mean(res.runs, 'encode_ms'), decodeMs: mean(res.runs, 'decode_ms'), totalMs,
+      rtf: audioSec ? totalMs / 1000 / audioSec : null, transcript: (res.transcript || '').slice(0, 80),
+      topOps: res.profile ? Object.values(res.profile).flatMap(p => p.topOps || []).slice(0, 20) : undefined,
+    });
+  } catch (e) {
+    rows.push({ ...cfg, valid: false, error: String((e && e.message) || e) });
+  }
+  state.rows = rows; state.idx = idx + 1; state.phase = 'apply';
+  localStorage.setItem(RUN_KEY, JSON.stringify(state));
+  location.reload();
+  return null;
+}
+
 /** Install the hook on window (idempotent). */
 export function installBench() {
   if (typeof window === 'undefined') return;
   window.__ptBench = {
     version: 1,
     readSetting, writeSetting, measure, profile,
-    synthPcm, pcmFromUrl, pcmFromBase64,
+    synthPcm, pcmFromUrl, pcmFromBase64, runMatrix, resumeMatrix,
     async setConfig({ encoderQuant, cpuThreads, useWebGPU = false } = {}) {
       if (encoderQuant !== undefined) await writeSetting('encoderQuant', encoderQuant);
       if (cpuThreads !== undefined) await writeSetting('cpuThreads', Number(cpuThreads));
@@ -195,4 +286,8 @@ export function installBench() {
     },
   };
   console.log('[bench] window.__ptBench installed');
+  // Continue an interrupted runMatrix (state survives the per-config reloads).
+  if (localStorage.getItem(RUN_KEY)) {
+    setTimeout(() => { resumeMatrix().catch(e => console.warn('[bench] resume failed', e)); }, 1200);
+  }
 }

@@ -641,7 +641,7 @@ export default function App() {
       setChunkProg({ n: 0, total: 1 });
       const res = await modelRef.current.transcribeChunked(audio16, 16000, {
         enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
-        returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: false,
+        returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: BENCH_ENABLED,
       }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
       setChunkProg(null);
       // Messwerte fuer den Statistik-Reiter (Timings werden immer gesammelt;
