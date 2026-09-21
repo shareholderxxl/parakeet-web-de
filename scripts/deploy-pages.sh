@@ -30,6 +30,10 @@ PAGES_DIR="${PAGES_DIR:-$HOME/.cache/portabletranscribe-pages}"
 PAGES_BRANCH="${PAGES_BRANCH:-main}"
 PAGES_MODEL_REPO="${PAGES_MODEL_REPO:-efederici/parakeet-tdt-0.6b-v3-onnx-int4}"
 PAGES_MODEL_REVISION="${PAGES_MODEL_REVISION:-main}"
+# Decoder aus dem optimierten Repo (in-graph lse/topk) -> schneller Decode.
+PAGES_MODEL_DECODER_REPO="${PAGES_MODEL_DECODER_REPO:-Olicorne/parakeet-tdt-0.6b-v3-optimized-onnx}"
+PAGES_MODEL_DECODER_SUBFOLDER="${PAGES_MODEL_DECODER_SUBFOLDER:-int8}"
+PAGES_MODEL_DECODER_FILE="${PAGES_MODEL_DECODER_FILE:-decoder_joint-model.int8.onnx}"
 
 DIST="$REPO_ROOT/app/ui/dist"
 PAGES_URL="https://$(basename "$PAGES_REPO" .git)/"
@@ -43,6 +47,9 @@ window.__CONFIG__ = {
   VITE_MODEL_SOURCE: 'remote',
   VITE_MODEL_REPO: '${PAGES_MODEL_REPO}',
   VITE_MODEL_REVISION: '${PAGES_MODEL_REVISION}',
+  VITE_MODEL_DECODER_REPO: '${PAGES_MODEL_DECODER_REPO}',
+  VITE_MODEL_DECODER_SUBFOLDER: '${PAGES_MODEL_DECODER_SUBFOLDER}',
+  VITE_MODEL_DECODER_FILE: '${PAGES_MODEL_DECODER_FILE}',
 };
 EOF
 

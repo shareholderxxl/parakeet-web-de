@@ -39,6 +39,7 @@
 | 13 | **Playwright-E2E-Smoke-Test** | Headless-Chromium vorhanden: Modell-Load, Aufnahme simulieren, Historie/Export prüfen — sichert künftige Umbauten ab. | offen |
 | 14 | **README modernisieren + Cleanup** | README an neue UI/Features anpassen; ungenutzte alte UI-Libs entfernen (`lib/remote`, `diariz`, `supportReport`, …). | offen |
 | 16 | **GitHub-Pages-Hosting (öffentlich, nicht kommerziell)** | Root-Site `shareholderxxl.github.io`; App clientseitig, Modell von HuggingFace (`VITE_MODEL_SOURCE=remote`), Service Worker cached HF-Modell offline; Deploy nur per `scripts/deploy-pages.sh` (opencode-getriggert); Datenschutzseite, kein Impressum (privat). | ✅ umgesetzt (2026-09-21) — live; **Remote-Modell nur im SW-Cache** (kein IndexedDB-Doppel); **Modell-/Offline-Verifikation nur auf Client ≥8 GB** (4-GB-Wyse rebootet bei Modell-Last) |
+| 17 | **Schneller Decoder + Performance-Anzeige** | Stock-Decoder (efederici) hatte keine in-graph `lse`/`topk`-Ausgänge → teurer JS-Log-Partition-Pfad pro Decode-Schritt (thread-/GPU-unabhängig). Fix: optimierter int8-Decoder (Olicorne `int8/`) zum int4-Encoder; Timings im Statistik-Reiter (Encode/Decode/RTF/Backend/Threads). | ✅ umgesetzt (2026-09-21) — LAN-Decoder getauscht, Pages-Decoder-Override in `config.js`; Messwerte im Statistik-Reiter |
 
 ## Empfohlene Reihenfolge (bei Fortsetzung)
 

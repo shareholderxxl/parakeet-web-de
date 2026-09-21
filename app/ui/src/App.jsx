@@ -138,6 +138,12 @@ const STR = {
     statEntries: 'Einträge', statWords: 'Wörter gesamt', statAvg: 'Ø Wörter pro Eintrag',
     statDuration: 'Aufnahmedauer gesamt', statDurationHint: 'wird erst seit Einführung erfasst – ältere Einträge ohne Dauer',
     statFirst: 'Ältester Eintrag', statLast: 'Neuester Eintrag',
+    perfTitle: 'Performance (letzte Transkription)', perfAvgTitle: 'Ø dieser Sitzung', perfRuns: 'Läufe',
+    perfAudio: 'Audio', perfTotal: 'Gesamt', perfRtf: 'RTF (Verarbeitung/Audio)',
+    perfPre: 'Vorverarbeitung', perfEnc: 'Encoder', perfDec: 'Decoder', perfTok: 'Tokenizer',
+    perfBackend: 'Backend', perfThreads: 'Threads', perfCoi: 'Cross-Origin-Isolation',
+    perfYes: 'ja', perfNo: 'nein', perfEmpty: 'Noch keine Messwerte – einmal transkribieren.',
+    threadsHint: 'Threads wirken nur mit Cross-Origin-Isolation (LAN/Cloudflare) und nur auf den Encoder; auf GitHub Pages nicht verfügbar (dann 1 Thread). Änderungen greifen erst nach erneutem Modellladen.',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -187,6 +193,12 @@ const STR = {
     statEntries: 'Entries', statWords: 'Total words', statAvg: 'Avg. words per entry',
     statDuration: 'Total recording time', statDurationHint: 'recorded only recently – older entries have no duration',
     statFirst: 'Oldest entry', statLast: 'Newest entry',
+    perfTitle: 'Performance (last transcription)', perfAvgTitle: 'Session average', perfRuns: 'runs',
+    perfAudio: 'Audio', perfTotal: 'Total', perfRtf: 'RTF (processing/audio)',
+    perfPre: 'Preprocessing', perfEnc: 'Encoder', perfDec: 'Decoder', perfTok: 'Tokenizer',
+    perfBackend: 'Backend', perfThreads: 'Threads', perfCoi: 'Cross-origin isolation',
+    perfYes: 'yes', perfNo: 'no', perfEmpty: 'No measurements yet – run a transcription.',
+    threadsHint: 'Threads only take effect with cross-origin isolation (LAN/Cloudflare) and only for the encoder; unavailable on GitHub Pages (1 thread there). Changes apply after reloading the model.',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -243,6 +255,8 @@ export default function App() {
   const [useWebGPU, setUseWebGPU] = useState(false); // experimentell, Default AUS
   const [gpuFallback, setGpuFallback] = useState(false); // WebGPU fehlgeschlagen -> CPU aktiv
   const [webgpuAdapter, setWebgpuAdapter] = useState(undefined); // undefined=unbekannt, true/false
+  const [perfLast, setPerfLast] = useState(null); // letzte Transkriptions-Messwerte
+  const [perfAgg, setPerfAgg] = useState({ n: 0, audio: 0, total: 0, encode: 0, decode: 0, preprocess: 0, tokenize: 0 });
   const webgpuAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator;
 
   // Engine / transcribe state
@@ -513,12 +527,21 @@ export default function App() {
           // (Cache Storage). Keine zusaetzliche IndexedDB-Kopie -> halbiert
           // den Speicherbedarf; offline liefert der SW aus dem Cache.
           : { skipIdbCache: true }),
+        // Optionaler separater Decoder (mit in-graph lse/topk) – vermeidet den
+        // teuren JS-Log-Partition-Pfad eines Stock-Decoders.
+        ...(CONFIG.VITE_MODEL_DECODER_REPO ? {
+          decoderRepoId: CONFIG.VITE_MODEL_DECODER_REPO,
+          ...(CONFIG.VITE_MODEL_DECODER_REVISION ? { decoderRevision: CONFIG.VITE_MODEL_DECODER_REVISION } : {}),
+          ...(CONFIG.VITE_MODEL_DECODER_SUBFOLDER ? { decoderSubfolder: CONFIG.VITE_MODEL_DECODER_SUBFOLDER } : {}),
+          ...(CONFIG.VITE_MODEL_DECODER_FILE ? { decoderFilename: CONFIG.VITE_MODEL_DECODER_FILE } : {}),
+        } : {}),
         ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
       });
       const nMels = modelUrls.modelConfig?.featuresSize || 128;
       modelRef.current = await ParakeetModel.fromUrls({
         ...modelUrls.urls, filenames: modelUrls.filenames, backend,
         cpuThreads: Number(cpuThreads), preprocessorBackend: modelUrls.preprocessorBackend, nMels,
+        collectTimings: true,
       });
       setStatus('ready'); setCanRecord(true);
       if (backend !== 'wasm') flash(tr('gpuActive'));
@@ -579,9 +602,23 @@ export default function App() {
       setChunkProg({ n: 0, total: 1 });
       const res = await modelRef.current.transcribeChunked(audio16, 16000, {
         enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
-        returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: !!useWebGPU,
+        returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: false,
       }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
       setChunkProg(null);
+      // Messwerte fuer den Statistik-Reiter (Timings werden immer gesammelt;
+      // enableProfiling bleibt aus -> kein ORT-Session-Profiling-Overhead).
+      if (res.metrics) {
+        setPerfLast({ audioSec: +dur.toFixed(2), ...res.metrics });
+        setPerfAgg(a => ({
+          n: a.n + 1,
+          audio: a.audio + dur,
+          total: a.total + res.metrics.total_ms,
+          encode: a.encode + res.metrics.encode_ms,
+          decode: a.decode + res.metrics.decode_ms,
+          preprocess: a.preprocess + res.metrics.preprocess_ms,
+          tokenize: a.tokenize + res.metrics.tokenize_ms,
+        }));
+      }
       let text = res.utterance_text || '';
       const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length, durationSec: Math.round(dur * 10) / 10 };
       setTranscriptions(prev => [entry, ...prev]);
@@ -604,6 +641,7 @@ export default function App() {
     ? transcriptions.filter(t => normalizeForSearch(t.text).includes(historyNeedle))
     : transcriptions;
 
+  const crossOriginIsolated = typeof window !== 'undefined' && !!window.crossOriginIsolated;
   const stats = (() => {
     const count = transcriptions.length;
     const words = transcriptions.reduce((a, t) => a + (Number(t.wordCount) || 0), 0);
@@ -737,6 +775,26 @@ export default function App() {
                 <div className="pt-statcard"><span className="pt-statnum">{formatDay(stats.last, lang)}</span><span className="pt-statlabel">{tr('statLast')}</span></div>
               </div>
             )}
+            <h3 className="pt-perfhead">{tr('perfTitle')}</h3>
+            {perfLast ? (
+              <div className="pt-statgrid">
+                <div className="pt-statcard"><span className="pt-statnum">{perfLast.audioSec.toFixed(2)} s</span><span className="pt-statlabel">{tr('perfAudio')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{(perfLast.total_ms / 1000).toFixed(2)} s</span><span className="pt-statlabel">{tr('perfTotal')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{perfLast.procPerDur != null ? perfLast.procPerDur.toFixed(2) : '—'}</span><span className="pt-statlabel">{tr('perfRtf')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{perfLast.preprocess_ms} ms</span><span className="pt-statlabel">{tr('perfPre')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{perfLast.encode_ms} ms</span><span className="pt-statlabel">{tr('perfEnc')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{perfLast.decode_ms} ms</span><span className="pt-statlabel">{tr('perfDec')}</span></div>
+                <div className="pt-statcard"><span className="pt-statnum">{perfLast.tokenize_ms} ms</span><span className="pt-statlabel">{tr('perfTok')}</span></div>
+              </div>
+            ) : <p className="pt-muted">{tr('perfEmpty')}</p>}
+            {perfAgg.n > 0 && (
+              <p className="pt-muted">
+                {tr('perfAvgTitle')} ({perfAgg.n} {tr('perfRuns')}): {(perfAgg.total / 1000).toFixed(2)} s · RTF {perfAgg.audio ? (perfAgg.total / 1000 / perfAgg.audio).toFixed(2) : '—'} · {tr('perfEnc')} {(perfAgg.encode / perfAgg.n).toFixed(0)} ms · {tr('perfDec')} {(perfAgg.decode / perfAgg.n).toFixed(0)} ms
+              </p>
+            )}
+            <p className="pt-muted">
+              {tr('perfBackend')}: {useWebGPU ? 'WebGPU-Hybrid' : 'WASM'} · {tr('perfThreads')}: {crossOriginIsolated ? Number(cpuThreads) : 1} · {tr('perfCoi')}: {crossOriginIsolated ? tr('perfYes') : tr('perfNo')}
+            </p>
           </section>
 
         <section className={`pt-settings${view !== 'settings' ? ' pt-hidden' : ''}`}>
@@ -749,6 +807,7 @@ export default function App() {
               <label className="pt-row"><span>{tr('chunkLabel')}</span><input type="checkbox" checked={enableChunking} onChange={e => setEnableChunking(e.target.checked)} /></label>
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
+              <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('threadsHint')}</p>
               <label className="pt-row"><span>{tr('gpuLabel')}</span><input type="checkbox" checked={useWebGPU} onChange={e => { setUseWebGPU(e.target.checked); setGpuFallback(false); }} /></label>
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{(webgpuAvailable && webgpuAdapter !== false) ? tr('gpuHint') : tr('gpuUnavailable')}</p>
               {gpuFallback && <p className="pt-error" role="status">{tr('gpuFallback')}</p>}

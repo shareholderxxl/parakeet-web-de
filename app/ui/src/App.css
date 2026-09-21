@@ -158,6 +158,8 @@ html[data-theme="dark"] .ql-snow .ql-picker-options { background: var(--bg-card)
 .pt-statnum { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pt-statlabel { color: var(--text-subtle); font-size: .85rem; }
 .pt-statnote { color: var(--text-subtle); font-size: .72rem; line-height: 1.35; margin-top: 2px; }
+.pt-stats .pt-perfhead { margin: 22px 0 10px; font-size: 1.05rem; }
+.pt-stats .pt-muted { margin: 10px 0 0; }
 
 /* ─── Settings ─── */
 .pt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: .95rem; }

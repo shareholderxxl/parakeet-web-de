@@ -1253,7 +1253,7 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   // Use model config defaults if available (e.g. nemo128 vs nemo80)
   const defaultPreprocessor = modelConfig?.preprocessor || 'nemo128';
 
-  const { encoderQuant = 'int8', decoderQuant = 'int8', preprocessor = defaultPreprocessor, preprocessorBackend = 'js', backend = 'webgpu', progress, localFallbackBaseUrl, localUpgradeBaseUrl, allowWasmFp32 = false, protectCacheKeys = [] } = options;
+  const { encoderQuant = 'int8', decoderQuant = 'int8', preprocessor = defaultPreprocessor, preprocessorBackend = 'js', backend = 'webgpu', progress, localFallbackBaseUrl, localUpgradeBaseUrl, allowWasmFp32 = false, protectCacheKeys = [], decoderRepoId, decoderRevision, decoderSubfolder = '', decoderFilename } = options;
   // The base URL all files are actually fetched from. Starts as the explicit
   // local fallback (if any), but can flip to localUpgradeBaseUrl below when the
   // primary (HF) source cannot serve the requested quant and the local mirror
@@ -1349,6 +1349,13 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   // loaded session's outputNames, not from the filename.
   const encoderName = `encoder-model${QUANT_SUFFIX[encoderQ]}`;
   const decoderName = `decoder_joint-model${QUANT_SUFFIX[decoderQ]}`;
+  // Optionale separate Decoder-Quelle (z. B. int4-Encoder von efederici + der
+  // optimierte int8-Decoder mit in-graph lse/topk aus dem Olicorne-Repo, der den
+  // teuren JS-Log-Partition-Pfad vermeidet). Ohne decoderRepoId bleibt alles wie
+  // bisher (gleiche Quelle wie der Encoder).
+  const decoderOverride = decoderRepoId
+    ? { repoId: decoderRepoId, revision: decoderRevision || effectiveRevision, subfolder: decoderSubfolder || '', filename: decoderFilename || decoderName }
+    : null;
 
   // External encoder weights come in one of two layouts. A sharded fp32 encoder
   // (parakeet-tdt-0.6b-v3-optimized-onnx/scripts/shard-fp32.py) splits them into <name>.data.000/.001/... files, each
@@ -1438,7 +1445,7 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
       urls: {},
       filenames: {
           encoder: encoderName,
-          decoder: decoderName
+          decoder: decoderOverride ? decoderOverride.filename : decoderName
       },
       quantisation: { encoder: encoderQ, decoder: decoderQ },
       // Downgrade flag: true when this source could not satisfy the requested
@@ -1466,6 +1473,11 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   const downloadFile = (name, asBytes = false, noCache = false) => {
     const wrappedProgress = progress ? (p) => progress({ ...p, file: name }) : undefined;
     const perFileOpts = { ...options, revision: effectiveRevision, progress: wrappedProgress, asBytes, noCache };
+    if (decoderOverride && name === decoderName) {
+      return getModelFile(decoderOverride.repoId, decoderOverride.filename, {
+        ...perFileOpts, revision: decoderOverride.revision, subfolder: decoderOverride.subfolder,
+      });
+    }
     return effectiveLocalBase
       ? getLocalModelFile(effectiveLocalBase, repoId, name, perFileOpts)
       : getModelFile(repoId, name, perFileOpts);

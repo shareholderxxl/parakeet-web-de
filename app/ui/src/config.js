@@ -9,6 +9,13 @@ export const CONFIG = {
   VITE_MODEL_REPO: runtime.VITE_MODEL_REPO ?? import.meta.env.VITE_MODEL_REPO,
   VITE_MODEL_REVISION: runtime.VITE_MODEL_REVISION ?? import.meta.env.VITE_MODEL_REVISION,
   VITE_MODEL_SOURCE: runtime.VITE_MODEL_SOURCE ?? import.meta.env.VITE_MODEL_SOURCE,
+  // Optional: Decoder aus einer separaten Quelle laden (z. B. int4-Encoder von
+  // efederici + optimierter int8-Decoder mit in-graph lse/topk aus dem
+  // Olicorne-Repo). Leer/ungesetzt = Decoder aus derselben Quelle wie der Encoder.
+  VITE_MODEL_DECODER_REPO: runtime.VITE_MODEL_DECODER_REPO ?? import.meta.env.VITE_MODEL_DECODER_REPO,
+  VITE_MODEL_DECODER_REVISION: runtime.VITE_MODEL_DECODER_REVISION ?? import.meta.env.VITE_MODEL_DECODER_REVISION,
+  VITE_MODEL_DECODER_SUBFOLDER: runtime.VITE_MODEL_DECODER_SUBFOLDER ?? import.meta.env.VITE_MODEL_DECODER_SUBFOLDER,
+  VITE_MODEL_DECODER_FILE: runtime.VITE_MODEL_DECODER_FILE ?? import.meta.env.VITE_MODEL_DECODER_FILE,
   VITE_ANALYTICS_URL: runtime.VITE_ANALYTICS_URL ?? import.meta.env.VITE_ANALYTICS_URL,
   VITE_ANALYTICS_WEBSITE_ID: runtime.VITE_ANALYTICS_WEBSITE_ID ?? import.meta.env.VITE_ANALYTICS_WEBSITE_ID,
   // Every new VITE_* key the operator can set MUST be added here, otherwise

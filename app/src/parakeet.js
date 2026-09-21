@@ -690,12 +690,14 @@ const GREEDY_CONF_TEMP_EPS = 1e-8;
  * transformerjs style) exported by parakeet TDT.
  */
 export class ParakeetModel {
-  constructor({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling = 8, windowStride = 0.01, normalizer = (s)=>s, verbose = false, maxEncoderBatch = 1, useTopkOutputs = true }) {
+  constructor({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling = 8, windowStride = 0.01, normalizer = (s)=>s, verbose = false, maxEncoderBatch = 1, useTopkOutputs = true, collectTimings = false }) {
     this.tokenizer = tokenizer;
     this.encoderSession = encoderSession;
     this.joinerSession = joinerSession;
     this.preprocessor = preprocessor;
     this.ort = ort;
+    // Timings immer sammeln (billig), unabhaengig vom ORT-Session-Profiling.
+    this.collectTimings = !!collectTimings;
 
     // Largest batch the encoder may fold into a single encoderSession.run.
     // 1 == today's byte-identical per-chunk encode (WASM, and the default). On
@@ -851,6 +853,8 @@ export class ParakeetModel {
       windowStride = 0.01,
       verbose = false,
       enableProfiling = false,
+      // Nur Timings sammeln (fuer die Statistik), OHNE ORT-Session-Profiling.
+      collectTimings = false,
       enableGraphCapture,
       cpuThreads = undefined,
       // 'js' uses the pure-JS mel.js preprocessor (no ONNX download needed);
@@ -982,7 +986,7 @@ export class ParakeetModel {
       console.log(`[Parakeet.js] Encoder batching enabled: batch=${maxEncoderBatch} (backend=${backend})`);
     }
 
-    return new ParakeetModel({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling, windowStride, verbose, maxEncoderBatch, useTopkOutputs: cfg.useTopkOutputs });
+    return new ParakeetModel({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling, windowStride, verbose, maxEncoderBatch, useTopkOutputs: cfg.useTopkOutputs, collectTimings: cfg.collectTimings });
   }
 
   /**
@@ -2507,7 +2511,7 @@ export class ParakeetModel {
    */
   async encode(audio, sampleRate = 16000, opts = {}) {
     const { enableProfiling = false } = opts;
-    const perfEnabled = this.verbose || enableProfiling;
+    const perfEnabled = this.verbose || enableProfiling || this.collectTimings;
     let tPreproc = 0, tEncode = 0;
     let input = null, lenTensor = null, enc = null;
     try {
@@ -2621,7 +2625,7 @@ export class ParakeetModel {
     if (N === 1) return [await this.encode(chunksPcm[0], sampleRate, opts)];
 
     const { enableProfiling = false } = opts;
-    const perfEnabled = this.verbose || enableProfiling;
+    const perfEnabled = this.verbose || enableProfiling || this.collectTimings;
 
     let input = null, lenTensor = null, enc = null, encLen = null;
     try {
