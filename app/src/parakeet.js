@@ -2832,7 +2832,7 @@ export class ParakeetModel {
     // Collect per-stage timings only when the caller opts in. Default off so a
     // production transcribe() doesn't spam the console; `verbose: true` at model
     // construction also flips it on for development.
-    const perfEnabled = this.verbose || debug || enableProfiling;
+    const perfEnabled = this.verbose || debug || enableProfiling || this.collectTimings;
     let t0, tPreproc = 0, tEncode = 0, tDecode = 0, tToken = 0;
     if (perfEnabled) t0 = performance.now();
 
@@ -3456,7 +3456,7 @@ export class ParakeetModel {
     // exactly as before. The encoder's own preprocess_ms/encode_ms ride through
     // encoded.* into transcribe()'s metrics, so the totals below are unchanged.
     const batchEncode = this.maxEncoderBatch > 1;
-    const perfEnabled = this.verbose || !!transcribeOpts.enableProfiling;
+    const perfEnabled = this.verbose || !!transcribeOpts.enableProfiling || this.collectTimings;
     const chunkLen = (p) => p.end - p.start;
     const encodedCache = new Array(chunkPlan.length).fill(null);
     const ensureEncoded = async (ci) => {

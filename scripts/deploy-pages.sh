@@ -36,13 +36,19 @@ PAGES_MODEL_DECODER_SUBFOLDER="${PAGES_MODEL_DECODER_SUBFOLDER:-int8}"
 PAGES_MODEL_DECODER_FILE="${PAGES_MODEL_DECODER_FILE:-decoder_joint-model.int8.onnx}"
 
 DIST="$REPO_ROOT/app/ui/dist"
+# Pages wird aus einer KOPIE gebaut: das LAN-deploy (serve.py) nutzt dasselbe
+# app/ui/dist, und die remote-config.js darf dort NICHT landen.
+PAGES_DIST="${PAGES_DIST:-${TMPDIR:-/tmp}/portabletranscribe-pages-dist}"
 PAGES_URL="https://$(basename "$PAGES_REPO" .git)/"
 
 echo "== Build (app/ui) =="
 ( cd "$REPO_ROOT/app/ui" && npm run build )
 
+rm -rf "$PAGES_DIST"
+cp -a "$DIST" "$PAGES_DIST"
+
 echo "== Modellquelle auf 'remote' (HuggingFace) stellen =="
-cat > "$DIST/config.js" <<EOF
+cat > "$PAGES_DIST/config.js" <<EOF
 window.__CONFIG__ = {
   VITE_MODEL_SOURCE: 'remote',
   VITE_MODEL_REPO: '${PAGES_MODEL_REPO}',
@@ -54,7 +60,7 @@ window.__CONFIG__ = {
 EOF
 
 # Jekyll aus: sonst ignoriert/transformiert GitHub Pages Dateien (z. B. .well-known).
-touch "$DIST/.nojekyll"
+touch "$PAGES_DIST/.nojekyll"
 
 echo "== Pages-Repo bereitstellen: $PAGES_DIR =="
 if [ ! -d "$PAGES_DIR/.git" ]; then
@@ -71,7 +77,7 @@ git -C "$PAGES_DIR" pull --ff-only -q 2>/dev/null || true
 echo "== Sync dist -> Pages-Repo (ohne ffmpeg/) =="
 # rsync ist nicht ueberall vorhanden; tar + vorheriges Leeren ist gleichwertig.
 find "$PAGES_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-tar -C "$DIST" --exclude='./ffmpeg' -cf - . | tar -C "$PAGES_DIR" -xf -
+tar -C "$PAGES_DIST" --exclude='./ffmpeg' -cf - . | tar -C "$PAGES_DIR" -xf -
 
 cd "$PAGES_DIR"
 # Git-Identitaet im Pages-Repo sicherstellen (das Hauptrepo hat sie lokal).
