@@ -68,7 +68,7 @@ export function executionProvidersFor(backend) {
  *   keeping `log` off; only `verbose`/`debug` opts in to the console output.
  * @returns {object|null} The metrics object, or null when perf is disabled.
  */
-function buildPerfMetrics(perfEnabled, { t0, audioSec, preprocessMs, encodeMs, decodeMs, tokenizeMs }, { log = false } = {}) {
+function buildPerfMetrics(perfEnabled, { t0, audioSec, preprocessMs, encodeMs, decodeMs, tokenizeMs }, { log = false, env = {} } = {}) {
   if (!perfEnabled) return null;
   const totalMs = performance.now() - t0;
   const procPerDur = (totalMs / 1000) / audioSec;
@@ -89,6 +89,7 @@ function buildPerfMetrics(perfEnabled, { t0, audioSec, preprocessMs, encodeMs, d
     tokenize_ms: +tokenizeMs.toFixed(1),
     total_ms: +totalMs.toFixed(1),
     procPerDur: +procPerDur.toFixed(2),
+    ...env,
   };
 }
 
@@ -690,7 +691,7 @@ const GREEDY_CONF_TEMP_EPS = 1e-8;
  * transformerjs style) exported by parakeet TDT.
  */
 export class ParakeetModel {
-  constructor({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling = 8, windowStride = 0.01, normalizer = (s)=>s, verbose = false, maxEncoderBatch = 1, useTopkOutputs = true, collectTimings = false }) {
+  constructor({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling = 8, windowStride = 0.01, normalizer = (s)=>s, verbose = false, maxEncoderBatch = 1, useTopkOutputs = true, collectTimings = false, backend = 'wasm' }) {
     this.tokenizer = tokenizer;
     this.encoderSession = encoderSession;
     this.joinerSession = joinerSession;
@@ -698,6 +699,7 @@ export class ParakeetModel {
     this.ort = ort;
     // Timings immer sammeln (billig), unabhaengig vom ORT-Session-Profiling.
     this.collectTimings = !!collectTimings;
+    this.backend = backend;
 
     // Largest batch the encoder may fold into a single encoderSession.run.
     // 1 == today's byte-identical per-chunk encode (WASM, and the default). On
@@ -986,7 +988,7 @@ export class ParakeetModel {
       console.log(`[Parakeet.js] Encoder batching enabled: batch=${maxEncoderBatch} (backend=${backend})`);
     }
 
-    return new ParakeetModel({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling, windowStride, verbose, maxEncoderBatch, useTopkOutputs: cfg.useTopkOutputs, collectTimings: cfg.collectTimings });
+    return new ParakeetModel({ tokenizer, encoderSession, joinerSession, preprocessor, ort, subsampling, windowStride, verbose, maxEncoderBatch, useTopkOutputs: cfg.useTopkOutputs, collectTimings: cfg.collectTimings, backend: cfg.backend || 'wasm' });
   }
 
   /**
@@ -2509,6 +2511,16 @@ export class ParakeetModel {
    * only affect decoding) for a given utterance, so the benchmark encodes each
    * utterance once and reuses the result across the whole sweep.
    */
+  // Effektive Laufzeit-Umgebung fuer die Statistik (autoritativ statt geraten).
+  _perfEnv() {
+    const coi = (typeof self !== 'undefined' && typeof self.crossOriginIsolated === 'boolean') ? self.crossOriginIsolated : null;
+    return {
+      backend: this.backend || 'wasm',
+      numThreads: (this.ort && this.ort.env && this.ort.env.wasm && this.ort.env.wasm.numThreads) ?? null,
+      crossOriginIsolated: coi,
+    };
+  }
+
   async encode(audio, sampleRate = 16000, opts = {}) {
     const { enableProfiling = false } = opts;
     const perfEnabled = this.verbose || enableProfiling || this.collectTimings;
@@ -3157,7 +3169,7 @@ export class ParakeetModel {
       const metrics = buildPerfMetrics(perfEnabled, {
         t0, audioSec: audio.length / sampleRate,
         preprocessMs: tPreproc, encodeMs: tEncode, decodeMs: tDecode, tokenizeMs: tToken,
-      }, { log: this.verbose || debug });
+      }, { log: this.verbose || debug, env: this._perfEnv() });
       const earlyOut = { utterance_text: text, words: [], metrics, is_final: !returnDecoderState };
       if (returnDecoderState) earlyOut.decoderState = finalDecoderState;
       if (beamStats) earlyOut.beamStats = beamStats;
@@ -3215,7 +3227,7 @@ export class ParakeetModel {
     const metrics = buildPerfMetrics(perfEnabled, {
       t0, audioSec: audio.length / sampleRate,
       preprocessMs: tPreproc, encodeMs: tEncode, decodeMs: tDecode, tokenizeMs: tToken,
-    }, { log: this.verbose || debug });
+    }, { log: this.verbose || debug, env: this._perfEnv() });
 
     const fullOut = {
       utterance_text: text,
@@ -3719,6 +3731,7 @@ export class ParakeetModel {
         tokenize_ms: +totalTokenizeMs.toFixed(1),
         total_ms: +totalProcessingTime.toFixed(1),
         procPerDur: totalProcessingTime ? +((totalProcessingTime / 1000) / totalDuration).toFixed(2) : null,
+        ...this._perfEnv(),
       } : null,
       is_final: true,
     };

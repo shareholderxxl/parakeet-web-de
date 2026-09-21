@@ -142,7 +142,7 @@ const STR = {
     perfAudio: 'Audio', perfTotal: 'Gesamt', perfRtf: 'RTF (Verarbeitung/Audio)',
     perfPre: 'Vorverarbeitung', perfEnc: 'Encoder', perfDec: 'Decoder', perfTok: 'Tokenizer',
     perfBackend: 'Backend', perfThreads: 'Threads', perfCoi: 'Cross-Origin-Isolation',
-    perfYes: 'ja', perfNo: 'nein', perfEmpty: 'Noch keine Messwerte – einmal transkribieren.',
+    perfYes: 'ja', perfNo: 'nein', perfEmpty: 'Noch keine Messwerte – einmal transkribieren.', perfCopy: 'Messwerte kopieren',
     threadsHint: 'Threads wirken nur mit Cross-Origin-Isolation (LAN/Cloudflare) und nur auf den Encoder; auf GitHub Pages nicht verfügbar (dann 1 Thread). Änderungen greifen erst nach erneutem Modellladen.',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
@@ -197,7 +197,7 @@ const STR = {
     perfAudio: 'Audio', perfTotal: 'Total', perfRtf: 'RTF (processing/audio)',
     perfPre: 'Preprocessing', perfEnc: 'Encoder', perfDec: 'Decoder', perfTok: 'Tokenizer',
     perfBackend: 'Backend', perfThreads: 'Threads', perfCoi: 'Cross-origin isolation',
-    perfYes: 'yes', perfNo: 'no', perfEmpty: 'No measurements yet – run a transcription.',
+    perfYes: 'yes', perfNo: 'no', perfEmpty: 'No measurements yet – run a transcription.', perfCopy: 'Copy measurements',
     threadsHint: 'Threads only take effect with cross-origin isolation (LAN/Cloudflare) and only for the encoder; unavailable on GitHub Pages (1 thread there). Changes apply after reloading the model.',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
@@ -793,8 +793,31 @@ export default function App() {
               </p>
             )}
             <p className="pt-muted">
-              {tr('perfBackend')}: {useWebGPU ? 'WebGPU-Hybrid' : 'WASM'} · {tr('perfThreads')}: {crossOriginIsolated ? Number(cpuThreads) : 1} · {tr('perfCoi')}: {crossOriginIsolated ? tr('perfYes') : tr('perfNo')}
+              {tr('perfBackend')}: {(perfLast && perfLast.backend) || (useWebGPU ? 'WebGPU-Hybrid' : 'WASM')} · {tr('perfThreads')}: {(perfLast && perfLast.numThreads != null) ? perfLast.numThreads : (crossOriginIsolated ? Number(cpuThreads) : 1)} · {tr('perfCoi')}: {((perfLast && perfLast.crossOriginIsolated != null) ? perfLast.crossOriginIsolated : crossOriginIsolated) ? tr('perfYes') : tr('perfNo')}
             </p>
+            {perfLast && (
+              <p style={{ marginTop: 10 }}>
+                <button className="pt-btn ghost" onClick={async () => {
+                  const report = {
+                    last: perfLast,
+                    sessionAvg: perfAgg.n ? {
+                      runs: perfAgg.n,
+                      audioSec: +perfAgg.audio.toFixed(2),
+                      totalMs: +perfAgg.total.toFixed(1),
+                      encodeMsAvg: +(perfAgg.encode / perfAgg.n).toFixed(1),
+                      decodeMsAvg: +(perfAgg.decode / perfAgg.n).toFixed(1),
+                      rtf: perfAgg.audio ? +((perfAgg.total / 1000) / perfAgg.audio).toFixed(2) : null,
+                    } : null,
+                    modelSource: CONFIG.VITE_MODEL_SOURCE || null,
+                    decoderRepo: CONFIG.VITE_MODEL_DECODER_REPO || null,
+                    webgpuSetting: useWebGPU,
+                    cpuThreadsSetting: Number(cpuThreads),
+                    userAgent: navigator.userAgent,
+                  };
+                  try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); flash(tr('copied')); } catch (e) { console.warn(e); }
+                }}>{tr('perfCopy')}</button>
+              </p>
+            )}
           </section>
 
         <section className={`pt-settings${view !== 'settings' ? ' pt-hidden' : ''}`}>
