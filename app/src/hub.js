@@ -472,9 +472,12 @@ async function blobToBytes(blob) {
  *   a blob URL. Used for the big WebGPU encoder/decoder to dodge the blob OOM.
  * @returns {Promise<string|Uint8Array>} Blob URL, or bytes when asBytes is set
  */
-async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRetries = MAX_RETRIES, asBytes = false, noCache = false) {
+async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRetries = MAX_RETRIES, asBytes = false, noCache = false, persist = true) {
   const partialKey = PARTIAL_PREFIX + cacheKey;
   const segKey = (i) => `${partialKey}${SEGMENT_INFIX}${i}`;
+  // persist=false: NICHT in IndexedDB schreiben/lesen (Remote-Modell, das der
+  // Service Worker in Cache Storage haelt). Es wird trotzdem ein Blob gebaut und
+  // zurueckgegeben; nur die IDB-Kopie entfaellt (halbiert den Speicherbedarf).
 
   // Stream-to-memory mode (noCache): used for the multi-hundred-MB fp32 encoder
   // shards. The normal path offloads streamed bytes to IndexedDB segment Blobs
@@ -491,7 +494,7 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
   // so each flush only writes the new bytes since the last flush. This
   // keeps total IDB write cost linear in the file size.
   let meta = null;
-  if (!noCache && typeof indexedDB !== 'undefined') {
+  if (persist && !noCache && typeof indexedDB !== 'undefined') {
     try { meta = await getFileFromDb(partialKey); } catch (_) {}
   }
   // Backwards-compat: an old-format partial record had a `chunks` field.
@@ -507,7 +510,7 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
   let etag = meta?.etag || null;
   let contentType = meta?.contentType || 'application/octet-stream';
 
-  if (segCount > 0 && typeof indexedDB !== 'undefined') {
+  if (persist && segCount > 0 && typeof indexedDB !== 'undefined') {
     try {
       for (let i = 0; i < segCount; i++) {
         const seg = await getFileFromDb(segKey(i));
@@ -544,7 +547,7 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
   }
 
   async function deleteAllPartial() {
-    if (noCache || typeof indexedDB === 'undefined') return;
+    if (!persist || noCache || typeof indexedDB === 'undefined') return;
     try {
       const db = await getDb();
       await idbDelete(db, STORE_NAME, partialKey);
@@ -555,7 +558,7 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
   }
 
   async function writeMeta() {
-    if (typeof indexedDB === 'undefined') return;
+    if (!persist || typeof indexedDB === 'undefined') return;
     try {
       await saveFileToDb(partialKey, { received, total, etag, contentType, segCount });
     } catch (e) {
@@ -578,7 +581,7 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
   // cannot alias anything, and the in-memory segment Blob below lives in
   // ordinary spillable blob storage, independent of IndexedDB.
   async function flushTail() {
-    if (noCache || typeof indexedDB === 'undefined' || tailBytes === 0) return;
+    if (!persist || noCache || typeof indexedDB === 'undefined' || tailBytes === 0) return;
     const buf = new Uint8Array(tailBytes);
     let off = 0;
     for (const c of tailChunks) { buf.set(c, off); off += c.length; }
@@ -755,7 +758,7 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
   // is backed by the cache record's own IndexedDB storage, which lives as long
   // as the record, i.e. the exact blob every warm reload already serves.
   let blob = composite;
-  if (typeof indexedDB !== 'undefined') {
+  if (persist && typeof indexedDB !== 'undefined') {
     try {
       await saveFileToDb(cacheKey, composite);
       // Record validation metadata next to the blob so a later load can verify
@@ -784,7 +787,8 @@ async function _streamAndCache(url, cacheKey, filename, progress, logTag, maxRet
 }
 
 export async function getModelFile(repoId, filename, options = {}) {
-  const { revision = 'main', subfolder = '', progress, asBytes = false, noCache = false } = options;
+  const { revision = 'main', subfolder = '', progress, asBytes = false, noCache = false, skipIdbCache = false } = options;
+  const persist = !skipIdbCache;
 
   // Encode the path components so slash-containing branch names (e.g.
   // 'refs/pr/1') and any URL-reserved characters in subfolder/filename
@@ -809,7 +813,7 @@ export async function getModelFile(repoId, filename, options = {}) {
   // Check IndexedDB first
   const cacheKey = makeCacheKey(repoId, revision, subfolder, filename);
 
-  if (!noCache && typeof indexedDB !== 'undefined') {
+  if (persist && !noCache && typeof indexedDB !== 'undefined') {
     try {
       const cachedBlob = await getFileFromDb(cacheKey);
       if (cachedBlob) {
@@ -836,7 +840,7 @@ export async function getModelFile(repoId, filename, options = {}) {
   // the default retry count.
   console.log(`[Hub] Downloading ${filename} from ${repoId}...`);
   try {
-    return await _streamAndCache(url, cacheKey, filename, progress, '[Hub]', 1, asBytes, noCache);
+    return await _streamAndCache(url, cacheKey, filename, progress, '[Hub]', 1, asBytes, noCache, persist);
   } catch (fetchErr) {
     // Wrap in HubDownloadError so the UI can detect HF-specific failures
     // (network errors, CORS blocks, firewalls, HTTP errors after all retries).
@@ -871,11 +875,12 @@ export async function getModelText(repoId, filename, options = {}) {
  * @returns {Promise<string>} Blob URL to the downloaded file
  */
 export async function getLocalModelFile(baseUrl, repoId, filename, options = {}) {
-  const { progress, revision = 'main', subfolder = '', asBytes = false, noCache = false } = options;
+  const { progress, revision = 'main', subfolder = '', asBytes = false, noCache = false, skipIdbCache = false } = options;
+  const persist = !skipIdbCache;
 
   // Reuse IndexedDB cache (same key scheme so a prior HF download is also matched)
   const cacheKey = makeCacheKey(repoId, revision, subfolder, filename);
-  if (!noCache && typeof indexedDB !== 'undefined') {
+  if (persist && !noCache && typeof indexedDB !== 'undefined') {
     try {
       const cachedBlob = await getFileFromDb(cacheKey);
       if (cachedBlob) {
@@ -889,7 +894,7 @@ export async function getLocalModelFile(baseUrl, repoId, filename, options = {})
 
   const url = `${baseUrl}/${filename}`;
   console.log(`[Hub:local] Downloading ${filename} from ${url}...`);
-  return _streamAndCache(url, cacheKey, filename, progress, '[Hub:local]', MAX_RETRIES, asBytes, noCache);
+  return _streamAndCache(url, cacheKey, filename, progress, '[Hub:local]', MAX_RETRIES, asBytes, noCache, persist);
 }
 
 /**

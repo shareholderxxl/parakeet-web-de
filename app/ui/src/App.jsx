@@ -507,7 +507,12 @@ export default function App() {
       const modelUrls = await getParakeetModel(repoId, {
         encoderQuant: 'int4', decoderQuant: 'int8', preprocessor: 'js',
         backend, cpuThreads: Number(cpuThreads), progress,
-        ...(modelSource === 'local' ? { localFallbackBaseUrl: '/models' } : {}),
+        ...(modelSource === 'local'
+          ? { localFallbackBaseUrl: '/models' }
+          // Remote (HuggingFace): nur der Service Worker cacht das Modell
+          // (Cache Storage). Keine zusaetzliche IndexedDB-Kopie -> halbiert
+          // den Speicherbedarf; offline liefert der SW aus dem Cache.
+          : { skipIdbCache: true }),
         ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
       });
       const nMels = modelUrls.modelConfig?.featuresSize || 128;
