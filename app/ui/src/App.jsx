@@ -154,6 +154,7 @@ const STR = {
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', threadsLabel: 'CPU-Threads',
     gpuLabel: 'GPU (WebGPU) verwenden', gpuActive: 'GPU-Backend aktiv',
+    encQuantLabel: 'Encoder-Quantisierung', encQuantHint: 'int4 = kleiner (391 MB), int8 = groesser (~880 MB), auf CPU/WASM oft deutlich schneller. Aenderung greift nach erneutem Modellladen.',
     gpuHint: 'Experimentell: Der Encoder läuft auf der GPU, der Decoder auf der CPU. Bei Fehlern automatischer CPU-Fallback; Perf-Logs erscheinen in der Konsole.',
     gpuUnavailable: 'WebGPU ist in diesem Browser/Gerät nicht verfügbar.',
     gpuFallback: 'WebGPU fehlgeschlagen – CPU-Backend aktiv.',
@@ -209,6 +210,7 @@ const STR = {
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', threadsLabel: 'CPU threads',
     gpuLabel: 'Use GPU (WebGPU)', gpuActive: 'GPU backend active',
+    encQuantLabel: 'Encoder quantization', encQuantHint: 'int4 = smaller (391 MB), int8 = larger (~880 MB), often much faster on CPU/WASM. Change applies after reloading the model.',
     gpuHint: 'Experimental: the encoder runs on the GPU, the decoder on the CPU. Automatic CPU fallback on failure; perf logs appear in the console.',
     gpuUnavailable: 'WebGPU is not available in this browser/device.',
     gpuFallback: 'WebGPU failed – CPU backend active.',
@@ -253,6 +255,7 @@ export default function App() {
   const [showLicenses, setShowLicenses] = useState(false);
   const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
   const [useWebGPU, setUseWebGPU] = useState(false); // experimentell, Default AUS
+  const [encoderQuant, setEncoderQuant] = useState('int4'); // 'int4' | 'int8'
   const [gpuFallback, setGpuFallback] = useState(false); // WebGPU fehlgeschlagen -> CPU aktiv
   const [webgpuAdapter, setWebgpuAdapter] = useState(undefined); // undefined=unbekannt, true/false
   const [perfLast, setPerfLast] = useState(null); // letzte Transkriptions-Messwerte
@@ -396,7 +399,7 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [dic, per, ac, ch, cd, ct, hist, ur, gpu] = await Promise.all([
+      const [dic, per, ac, ch, cd, ct, hist, ur, gpu, encq] = await Promise.all([
         loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
@@ -404,6 +407,7 @@ export default function App() {
         loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
         loadSetting('useWebGPU', false),
+        loadSetting('encoderQuant', 'int4'),
       ]);
       setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
@@ -411,6 +415,7 @@ export default function App() {
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
       setUseWebGPU(!!gpu);
+      setEncoderQuant(encq === 'int8' ? 'int8' : 'int4');
       setSettingsLoaded(true);
       applyThemeToDom(currentTheme());
     })();
@@ -422,6 +427,7 @@ export default function App() {
   usePersistedSetting('chunkDuration', chunkDuration, settingsLoaded);
   usePersistedSetting('cpuThreads', cpuThreads, settingsLoaded);
   usePersistedSetting('useWebGPU', useWebGPU, settingsLoaded);
+  usePersistedSetting('encoderQuant', encoderQuant, settingsLoaded);
   usePersistedSetting('userDictationRules', userRules, settingsLoaded);
   useEffect(() => {
     if (!settingsLoaded) return;
@@ -519,7 +525,7 @@ export default function App() {
       // sonst probt die Engine zuerst /models und faellt dann auf int8 zurueck.
       const modelSource = CONFIG.VITE_MODEL_SOURCE || 'local';
       const modelUrls = await getParakeetModel(repoId, {
-        encoderQuant: 'int4', decoderQuant: 'int8', preprocessor: 'js',
+        encoderQuant, decoderQuant: 'int8', preprocessor: 'js',
         backend, cpuThreads: Number(cpuThreads), progress,
         ...(modelSource === 'local'
           ? { localFallbackBaseUrl: '/models' }
@@ -527,6 +533,13 @@ export default function App() {
           // (Cache Storage). Keine zusaetzliche IndexedDB-Kopie -> halbiert
           // den Speicherbedarf; offline liefert der SW aus dem Cache.
           : { skipIdbCache: true }),
+        // Optionaler separater Encoder (nur wenn int8 gewaehlt und konfiguriert).
+        ...(encoderQuant === 'int8' && CONFIG.VITE_MODEL_ENCODER_REPO ? {
+          encoderRepoId: CONFIG.VITE_MODEL_ENCODER_REPO,
+          ...(CONFIG.VITE_MODEL_ENCODER_REVISION ? { encoderRevision: CONFIG.VITE_MODEL_ENCODER_REVISION } : {}),
+          ...(CONFIG.VITE_MODEL_ENCODER_SUBFOLDER ? { encoderSubfolder: CONFIG.VITE_MODEL_ENCODER_SUBFOLDER } : {}),
+          ...(CONFIG.VITE_MODEL_ENCODER_FILE ? { encoderFilename: CONFIG.VITE_MODEL_ENCODER_FILE } : {}),
+        } : {}),
         // Optionaler separater Decoder (mit in-graph lse/topk) – vermeidet den
         // teuren JS-Log-Partition-Pfad eines Stock-Decoders.
         ...(CONFIG.VITE_MODEL_DECODER_REPO ? {
@@ -817,6 +830,7 @@ export default function App() {
                     backendSetting: useWebGPU ? 'webgpu-hybrid' : 'wasm',
                     webgpuAdapterAvailable: webgpuAdapter ?? null,
                     cpuThreadsSetting: Number(cpuThreads),
+                    encoderQuantSetting: encoderQuant,
                     modelSource: CONFIG.VITE_MODEL_SOURCE || null,
                     modelRepo: CONFIG.VITE_MODEL_REPO || null,
                     decoderRepo: CONFIG.VITE_MODEL_DECODER_REPO || null,
@@ -838,6 +852,8 @@ export default function App() {
               <label className="pt-row"><span>{tr('chunkLabel')}</span><input type="checkbox" checked={enableChunking} onChange={e => setEnableChunking(e.target.checked)} /></label>
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
+              <label className="pt-row"><span>{tr('encQuantLabel')}</span><select value={encoderQuant} onChange={e => setEncoderQuant(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="int4">int4 (391 MB)</option><option value="int8">int8 (~880 MB)</option></select></label>
+              <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('encQuantHint')}</p>
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('threadsHint')}</p>
               <label className="pt-row"><span>{tr('gpuLabel')}</span><input type="checkbox" checked={useWebGPU} onChange={e => { setUseWebGPU(e.target.checked); setGpuFallback(false); }} /></label>
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{(webgpuAvailable && webgpuAdapter !== false) ? tr('gpuHint') : tr('gpuUnavailable')}</p>

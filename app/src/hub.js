@@ -1253,7 +1253,7 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   // Use model config defaults if available (e.g. nemo128 vs nemo80)
   const defaultPreprocessor = modelConfig?.preprocessor || 'nemo128';
 
-  const { encoderQuant = 'int8', decoderQuant = 'int8', preprocessor = defaultPreprocessor, preprocessorBackend = 'js', backend = 'webgpu', progress, localFallbackBaseUrl, localUpgradeBaseUrl, allowWasmFp32 = false, protectCacheKeys = [], decoderRepoId, decoderRevision, decoderSubfolder = '', decoderFilename } = options;
+  const { encoderQuant = 'int8', decoderQuant = 'int8', preprocessor = defaultPreprocessor, preprocessorBackend = 'js', backend = 'webgpu', progress, localFallbackBaseUrl, localUpgradeBaseUrl, allowWasmFp32 = false, protectCacheKeys = [], decoderRepoId, decoderRevision, decoderSubfolder = '', decoderFilename, encoderRepoId, encoderRevision, encoderSubfolder = '', encoderFilename } = options;
   // The base URL all files are actually fetched from. Starts as the explicit
   // local fallback (if any), but can flip to localUpgradeBaseUrl below when the
   // primary (HF) source cannot serve the requested quant and the local mirror
@@ -1348,6 +1348,12 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   // decoder carries the in-graph LSE / top-K outputs is discovered from the
   // loaded session's outputNames, not from the filename.
   const encoderName = `encoder-model${QUANT_SUFFIX[encoderQ]}`;
+  // Optionale separate Encoder-Quelle (z. B. int8-Encoder aus dem Olicorne-Repo,
+  // wenn die Primaerquelle nur int4 fuehrt). Nur aktiv, wenn der Dateiname der
+  // gewaehlten Quantisierung passt (sonst wuerde int4 faelschlich dort gesucht).
+  const encoderOverride = (encoderRepoId && (encoderFilename || encoderName) === encoderName)
+    ? { repoId: encoderRepoId, revision: encoderRevision || effectiveRevision, subfolder: encoderSubfolder || '', filename: encoderFilename || encoderName }
+    : null;
   const decoderName = `decoder_joint-model${QUANT_SUFFIX[decoderQ]}`;
   // Optionale separate Decoder-Quelle (z. B. int4-Encoder von efederici + der
   // optimierte int8-Decoder mit in-graph lse/topk aus dem Olicorne-Repo, der den
@@ -1444,7 +1450,7 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   const results = {
       urls: {},
       filenames: {
-          encoder: encoderName,
+          encoder: encoderOverride ? encoderOverride.filename : encoderName,
           decoder: decoderOverride ? decoderOverride.filename : decoderName
       },
       quantisation: { encoder: encoderQ, decoder: decoderQ },
@@ -1473,6 +1479,11 @@ export async function getParakeetModel(repoIdOrModelKey, options = {}) {
   const downloadFile = (name, asBytes = false, noCache = false) => {
     const wrappedProgress = progress ? (p) => progress({ ...p, file: name }) : undefined;
     const perFileOpts = { ...options, revision: effectiveRevision, progress: wrappedProgress, asBytes, noCache };
+    if (encoderOverride && (name === encoderName || name === encoderFetchName)) {
+      return getModelFile(encoderOverride.repoId, encoderOverride.filename, {
+        ...perFileOpts, revision: encoderOverride.revision, subfolder: encoderOverride.subfolder,
+      });
+    }
     if (decoderOverride && name === decoderName) {
       return getModelFile(decoderOverride.repoId, decoderOverride.filename, {
         ...perFileOpts, revision: decoderOverride.revision, subfolder: decoderOverride.subfolder,
