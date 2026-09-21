@@ -148,6 +148,7 @@ async function emitPrecache() {
     '/manifest.webmanifest',
     '/pcm-recorder-worklet.js',
     '/portabletranscribe-architecture.html',
+    '/datenschutz.html',
     '/.well-known/asset-integrity.json',
     '/ort/manifest.json',
   ]);

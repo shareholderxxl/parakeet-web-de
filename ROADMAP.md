@@ -38,6 +38,7 @@
 |---|---------|--------------|--------|
 | 13 | **Playwright-E2E-Smoke-Test** | Headless-Chromium vorhanden: Modell-Load, Aufnahme simulieren, Historie/Export prüfen — sichert künftige Umbauten ab. | offen |
 | 14 | **README modernisieren + Cleanup** | README an neue UI/Features anpassen; ungenutzte alte UI-Libs entfernen (`lib/remote`, `diariz`, `supportReport`, …). | offen |
+| 16 | **GitHub-Pages-Hosting (öffentlich, nicht kommerziell)** | Root-Site `shareholderxxl.github.io`; App clientseitig, Modell von HuggingFace (`VITE_MODEL_SOURCE=remote`), Service Worker cached HF-Modell offline; Deploy nur per `scripts/deploy-pages.sh` (opencode-getriggert); Datenschutzseite, kein Impressum (privat). | ✅ umgesetzt (2026-09-21) — live; **Modell-/Offline-Verifikation nur auf Client ≥8 GB** (4-GB-Wyse rebootet bei Modell-Last) |
 
 ## Empfohlene Reihenfolge (bei Fortsetzung)
 

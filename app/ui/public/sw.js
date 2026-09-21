@@ -5,11 +5,12 @@
  * ändert sich der sw.js-Inhalt bei jedem Build -> der Browser erkennt das
  * Update zuverlässig, und install/activate können ohne Netz-Roundtrip arbeiten.
  *
- * Modell-Dateien (/models/) werden cache-first in Cache Storage gehalten, damit
- * die App samt Modell offline funktioniert. (Der grosse int4-Encoder laesst sich
- * in der Headless-Testshell nicht verifizieren; im echten Browser ist Cache
- * Storage der PWA-Standardweg. hub.js waehlt offline den int4-Quant, weil seine
- * /models-Probes bei Netzfehlern optimistisch sind.)
+ * Modell-Dateien werden cache-first in Cache Storage gehalten, damit die App
+ * samt Modell offline funktioniert — sowohl der eigene Mirror (/models/, LAN,
+ * Quelle 'local') als auch HuggingFace (huggingface.co/<repo>/resolve/…, Quelle
+ * 'remote', z. B. GitHub Pages). Zusaetzlich wird die HF-Dateiliste
+ * (api/models/…) network-first gecacht, damit hub.js offline den int4-Quant
+ * waehlen kann.
  */
 const BUILD_VERSION = '__BUILD_VERSION__';
 const PRECACHE = __PRECACHE__;
@@ -65,10 +66,29 @@ async function cacheFirst(request, cacheName) {
   const cached = await cache.match(request);
   if (cached) return cached;
   const res = await fetch(request);
-  if (res && res.status === 200 && res.type === 'basic') {
+  // 'basic' = same-origin, 'cors' = HuggingFace (Modell-Download).
+  if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
     cache.put(request, res.clone()).catch(() => {});
   }
   return res;
+}
+
+// Netz zuerst (frische Daten), Cache als Offline-Rueckfall. Fuer die
+// HF-Dateiliste (api/models/...) gedacht, damit hub.js offline die Datei-Liste
+// bekommt und den int4-Quant waehlen kann.
+async function networkFirstCache(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const res = await fetch(request);
+    if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
+      cache.put(request, res.clone()).catch(() => {});
+    }
+    return res;
+  } catch (e) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    throw e;
+  }
 }
 
 async function networkFirstNavigation(request) {
@@ -94,7 +114,18 @@ self.addEventListener('fetch', (event) => {
 
   let url;
   try { url = new URL(request.url); } catch { return; }
-  if (url.origin !== self.location.origin) return; // Drittanbieter: unangetastet
+
+  // HuggingFace (Modellquelle 'remote'): Modell-Dateien cache-first, die
+  // Dateiliste (api/models) network-first mit Offline-Fallback.
+  if (url.hostname === 'huggingface.co') {
+    if (/^\/[^/]+\/[^/]+\/resolve\//.test(url.pathname)) {
+      event.respondWith(cacheFirst(request, MODELS_CACHE));
+    } else if (url.pathname.startsWith('/api/models/')) {
+      event.respondWith(networkFirstCache(request, MODELS_CACHE));
+    }
+    return;
+  }
+  if (url.origin !== self.location.origin) return; // sonstige Drittanbieter
   if (url.pathname === '/sw.js') return;
 
   if (request.mode === 'navigate') {

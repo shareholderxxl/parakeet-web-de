@@ -163,7 +163,7 @@ const STR = {
     installDesktop: 'Chrome/Edge am Computer: Installations-Symbol in der Adressleiste oder Menü ⋮ → „Seite als App installieren“.',
     installMobile: 'Android: Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“.',
     installHttps: 'Benötigt HTTPS mit gültigem Zertifikat – im LAN ggf. das Zertifikat vertrauen.',
-    licenses: 'Lizenzen & Quellen', close: 'Schließen', theme: 'Design', themeLight: 'Hell', themeDark: 'Dunkel', switchLang: 'Sprache wechseln',
+    licenses: 'Lizenzen & Quellen', close: 'Schließen', theme: 'Design', privacy: 'Datenschutz', themeLight: 'Hell', themeDark: 'Dunkel', switchLang: 'Sprache wechseln',
     errNoModel: 'Bitte zuerst das Modell laden.', statusRecording: 'Aufnahme läuft…',
   },
   en: {
@@ -212,7 +212,7 @@ const STR = {
     installDesktop: 'Chrome/Edge on desktop: the install icon in the address bar, or menu ⋮ → “Install page as app”.',
     installMobile: 'Android: menu ⋮ → “Install app” / “Add to Home screen”.',
     installHttps: 'Requires HTTPS with a valid certificate — in a LAN, trust the certificate if needed.',
-    licenses: 'Licenses & sources', close: 'Close', theme: 'Theme', themeLight: 'Light', themeDark: 'Dark', switchLang: 'Switch language',
+    licenses: 'Licenses & sources', close: 'Close', theme: 'Theme', privacy: 'Privacy', themeLight: 'Light', themeDark: 'Dark', switchLang: 'Switch language',
     errNoModel: 'Load the model first.', statusRecording: 'Recording…',
   },
 };
@@ -500,10 +500,14 @@ export default function App() {
     setStatus('loading'); setError(null);
     try {
       const progress = () => {};
+      // Modellquelle: 'local' (eigener /models-Mirror, LAN) oder 'remote'
+      // (HuggingFace, z. B. GitHub Pages). Bei remote KEIN localFallbackBaseUrl,
+      // sonst probt die Engine zuerst /models und faellt dann auf int8 zurueck.
+      const modelSource = CONFIG.VITE_MODEL_SOURCE || 'local';
       const modelUrls = await getParakeetModel(repoId, {
         encoderQuant: 'int4', decoderQuant: 'int8', preprocessor: 'js',
         backend, cpuThreads: Number(cpuThreads), progress,
-        localFallbackBaseUrl: '/models',
+        ...(modelSource === 'local' ? { localFallbackBaseUrl: '/models' } : {}),
         ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
       });
       const nMels = modelUrls.modelConfig?.featuresSize || 128;
@@ -796,7 +800,10 @@ export default function App() {
               </ul>
               <p className="pt-muted">{tr('installHttps')}</p>
             </div>
-            <button className="pt-btn ghost" onClick={() => setShowLicenses(s => !s)} aria-expanded={showLicenses}>{tr('licenses')}</button>
+            <div className="pt-aboutlinks">
+              <button className="pt-btn ghost" onClick={() => setShowLicenses(s => !s)} aria-expanded={showLicenses}>{tr('licenses')}</button>
+              <a className="pt-btn ghost" href="/datenschutz.html" target="_blank" rel="noopener">{tr('privacy')}</a>
+            </div>
             {showLicenses && (
               <div className="pt-licenses">
                 <p>portabletranscribe is a fork/simplification of <strong>parakeet_web</strong> by thiswillbeyourgithub (AGPL-3.0).</p>
