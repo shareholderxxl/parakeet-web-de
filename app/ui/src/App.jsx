@@ -795,29 +795,37 @@ export default function App() {
             <p className="pt-muted">
               {tr('perfBackend')}: {(perfLast && perfLast.backend) || (useWebGPU ? 'WebGPU-Hybrid' : 'WASM')} · {tr('perfThreads')}: {(perfLast && perfLast.numThreads != null) ? perfLast.numThreads : (crossOriginIsolated ? Number(cpuThreads) : 1)} · {tr('perfCoi')}: {((perfLast && perfLast.crossOriginIsolated != null) ? perfLast.crossOriginIsolated : crossOriginIsolated) ? tr('perfYes') : tr('perfNo')}
             </p>
-            {perfLast && (
-              <p style={{ marginTop: 10 }}>
-                <button className="pt-btn ghost" onClick={async () => {
-                  const report = {
-                    last: perfLast,
-                    sessionAvg: perfAgg.n ? {
-                      runs: perfAgg.n,
-                      audioSec: +perfAgg.audio.toFixed(2),
-                      totalMs: +perfAgg.total.toFixed(1),
-                      encodeMsAvg: +(perfAgg.encode / perfAgg.n).toFixed(1),
-                      decodeMsAvg: +(perfAgg.decode / perfAgg.n).toFixed(1),
-                      rtf: perfAgg.audio ? +((perfAgg.total / 1000) / perfAgg.audio).toFixed(2) : null,
-                    } : null,
-                    modelSource: CONFIG.VITE_MODEL_SOURCE || null,
-                    decoderRepo: CONFIG.VITE_MODEL_DECODER_REPO || null,
-                    webgpuSetting: useWebGPU,
+            <p style={{ marginTop: 10 }}>
+              <button className="pt-btn ghost" onClick={async () => {
+                // Immer kopierbar: Umgebungswerte auch ohne Messung; Messwerte
+                // (letzte + Sitzungsdurchschnitt) sobald vorhanden.
+                const report = {
+                  measured: !!perfLast,
+                  last: perfLast || null,
+                  sessionAvg: perfAgg.n ? {
+                    runs: perfAgg.n,
+                    audioSec: +perfAgg.audio.toFixed(2),
+                    totalMs: +perfAgg.total.toFixed(1),
+                    encodeMsAvg: +(perfAgg.encode / perfAgg.n).toFixed(1),
+                    decodeMsAvg: +(perfAgg.decode / perfAgg.n).toFixed(1),
+                    rtf: perfAgg.audio ? +((perfAgg.total / 1000) / perfAgg.audio).toFixed(2) : null,
+                  } : null,
+                  env: {
+                    crossOriginIsolated: (typeof window !== 'undefined' && typeof window.crossOriginIsolated === 'boolean') ? window.crossOriginIsolated : null,
+                    ortWasmThreads: (typeof globalThis !== 'undefined' && globalThis.ort && globalThis.ort.env && globalThis.ort.env.wasm) ? (globalThis.ort.env.wasm.numThreads ?? null) : null,
+                    hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+                    backendSetting: useWebGPU ? 'webgpu-hybrid' : 'wasm',
+                    webgpuAdapterAvailable: webgpuAdapter ?? null,
                     cpuThreadsSetting: Number(cpuThreads),
+                    modelSource: CONFIG.VITE_MODEL_SOURCE || null,
+                    modelRepo: CONFIG.VITE_MODEL_REPO || null,
+                    decoderRepo: CONFIG.VITE_MODEL_DECODER_REPO || null,
                     userAgent: navigator.userAgent,
-                  };
-                  try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); flash(tr('copied')); } catch (e) { console.warn(e); }
-                }}>{tr('perfCopy')}</button>
-              </p>
-            )}
+                  },
+                };
+                try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); flash(tr('copied')); } catch (e) { console.warn(e); }
+              }}>{tr('perfCopy')}</button>
+            </p>
           </section>
 
         <section className={`pt-settings${view !== 'settings' ? ' pt-hidden' : ''}`}>
