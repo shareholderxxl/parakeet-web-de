@@ -23,9 +23,9 @@
 // requests nothing else. Downloading + hashing them anyway cost ~54 MB per
 // JS CONTEXT (main thread AND every worker: each one runs its own ORT
 // runtime), and the object URLs minted for the unused six were never
-// revoked. With the encode pool and the composed decode worker that is four
-// contexts fetching ~80 MB each at once, right while the model weights are
-// downloading; one of those concurrent transfers reliably died with
+// revoked. With several ORT contexts (e.g. one per worker) that is several
+// concurrent ~80 MB fetches right while the model weights are downloading;
+// one of those concurrent transfers reliably died with
 // net::ERR_FAILED ("Failed to fetch"), which permanently dropped a worker to
 // the in-thread fallback (caught by transcription-composed-pipeline.spec.js).
 // Verifying bytes that are never executed bought nothing anyway.
@@ -155,8 +155,8 @@ export async function _verifiedOrtWasmPaths(basePath) {
  * than 1). Mirror onnxruntime-web's own heuristic
  * (js/web/lib/backend-wasm.ts): ceil(hc / 2) approximates physical cores,
  * capped at 4 where intra-op scaling is already flat (1t->6t was only 2.6x).
- * Machines with more cores get their extra parallelism from the chunk-level
- * encoder pool (parallel encode workers), not from a wider intra-op pool.
+ * Machines with more cores are better served by chunking than by a wider
+ * intra-op pool (the chunk-parallel encode-worker pool was removed 2026-09).
  * @param {number} [hardwareConcurrency] navigator.hardwareConcurrency.
  * @returns {number} thread count >= 1.
  */

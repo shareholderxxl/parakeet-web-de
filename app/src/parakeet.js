@@ -996,9 +996,8 @@ export class ParakeetModel {
    * to the WASM EP, exactly as fromUrls forces it on WebGPU) + the tokenizer,
    * with NO encoder session and NO preprocessor. Such a model can only run
    * transcribe() when the caller supplies `opts.encoded` (precomputed encoder
-   * output) — it never preprocesses or encodes. This is what the decode worker
-   * (`app/ui/src/lib/decode.worker.js`) instantiates so WASM decode can overlap
-   * the main thread's GPU encode. Reuses the same session/tokenizer/externalData
+   * output) — it never preprocesses or encodes. Kept as part of the public engine
+   * API (the app currently decodes in-thread). Reuses the same session/tokenizer/externalData
    * plumbing as fromUrls so no decode logic is duplicated.
    *
    * `decoderUrl`/`decoderDataUrl` may be URL strings OR raw bytes (Uint8Array),
@@ -1038,10 +1037,9 @@ export class ParakeetModel {
    * Build an ENCODE-ONLY ParakeetModel: the encoder ONNX session + the mel
    * preprocessor, with NO joiner session and NO tokenizer. Such a model can
    * only run encode()/computeFeatures(); transcribe() is off the table (no
-   * joiner, no vocab). This is what each encode worker
-   * (`app/ui/src/lib/encode.worker.js`) instantiates, on the 'wasm' backend:
-   * the chunk-parallel WASM encode pool, two workers encoding different
-   * chunks concurrently while the main thread decodes. Mirrors
+   * joiner, no vocab). Kept as part of the public engine API (the chunk-parallel
+   * encode-worker pool was removed 2026-09: ~4% faster on a quiet 6C/12T box,
+   * ~15% slower under load, +1.7 GB RAM). Mirrors
    * decoderOnlyFromUrls: same session/externalData plumbing as fromUrls so no
    * encode logic is duplicated. `backend` also accepts the webgpu modes for
    * API symmetry with fromUrls (executionProvidersFor is shared), but the app
@@ -3581,11 +3579,9 @@ export class ParakeetModel {
 
     // Optional injected encoder: an async fn (pcm, meta, encodeOpts) -> the
     // `{ transposed, D, Tenc, preprocess_ms, encode_ms }` object encode()
-    // returns. App.jsx wires this to a POOL of encode workers on WASM so two
-    // chunks encode concurrently while decode runs on this thread (chunk-
-    // parallel encoding; thread scaling saturates near the physical core
-    // count, chunks are independent, so a second ORT instance converts the
-    // wasted headroom into throughput). parakeet.js stays worker-agnostic
+    // returns. Lets a caller move encode off this thread (the app currently
+    // does not; the chunk-parallel worker pool was removed 2026-09).
+    // parakeet.js stays worker-agnostic
     // (Node/CLI never sets it). Alone it drives the pool loop below (decode
     // stays on this thread); together with decodeChunk it COMPOSES: pooled
     // encodes feed the decode pipeline, so this thread only orchestrates and
@@ -3665,8 +3661,8 @@ export class ParakeetModel {
       // plus one chunk queued. Consumer: in STRICT chunk order, await the
       // encode and run the SAME transcribe() fed opts.encoded, so decode +
       // stitch are byte-identical to the serial path (same per-chunk compute
-      // and seams; only WHERE the encode ran moved). Metrics caveat, mirroring
-      // the decode worker's: each chunk's total_ms covers only the in-thread
+      // and seams; only WHERE the encode ran moved). Metrics caveat: each
+      // chunk's total_ms covers only the in-thread
       // decode wall (encode ran elsewhere, concurrently), while encode_ms /
       // preprocess_ms ride through opts.encoded and stay per-chunk correct.
       // Memory bound: at most `encodeAhead` encoder outputs are alive
@@ -3785,19 +3781,33 @@ export class ParakeetModel {
         const txt = FS.readFile('/tmp/' + file, { encoding: 'utf8' });
         const events = JSON.parse(txt);
         let gpu = 0, cpu = 0;
+        // Per-operator aggregation: which op dominates the run, and how often.
+        // This is what tells apart "the encoder is bandwidth bound" from "one
+        // kernel never uses the thread pool".
+        const ops = new Map();
         for (const ev of events) {
           if (ev.cat === 'Node') {
             const prov = ev.args?.provider;
             if (prov === 'webgpu') gpu += ev.dur;
             else if (prov) cpu += ev.dur;
+            const name = ev.name || '(unknown)';
+            const agg = ops.get(name) || { count: 0, total_us: 0 };
+            agg.count += 1; agg.total_us += ev.dur;
+            ops.set(name, agg);
           }
         }
-        summary[file] = { gpu_us: gpu, cpu_us: cpu, total_us: gpu + cpu };
+        const topOps = [...ops.entries()]
+          .map(([name, a]) => ({ name, count: a.count, total_ms: +(a.total_us / 1000).toFixed(1), avg_ms: +(a.total_us / a.count / 1000).toFixed(2) }))
+          .sort((a, b) => b.total_ms - a.total_ms);
+        summary[file] = { gpu_us: gpu, cpu_us: cpu, total_us: gpu + cpu, topOps };
       } catch (err) {
         console.warn('[Parakeet] Failed to parse profile file', file, err);
       }
     }
     console.table(summary);
+    for (const [file, s] of Object.entries(summary)) {
+      if (s && Array.isArray(s.topOps)) console.table(s.topOps.slice(0, 15));
+    }
     return summary;
   }
 } 

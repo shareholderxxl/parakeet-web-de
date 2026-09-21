@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css';
 import './App.css';
-import { ParakeetModel, getParakeetModel, checkLocalModelFiles } from 'parakeet.js';
+import { ParakeetModel, getParakeetModel, checkLocalModelFiles, defaultWasmThreads } from 'parakeet.js';
 import { useI18n } from './i18n.jsx';
 import { CONFIG } from './config.js';
 import { openIdb, idbGet, idbPut, idbDeleteDatabase } from '../../src/idb.js';
@@ -10,6 +10,7 @@ import { resamplePcmTo16k, createLevelMonitor } from './lib/audio.js';
 import { acquireKeepalive, releaseKeepalive } from './lib/keepalive.js';
 import { buildExportJson, buildExportTxt, exportFilename, parseImportJson, mergeEntries, downloadBlob } from './lib/historyIo.js';
 import { applyUserRules, validateRule } from './lib/dictationRules.js';
+import { restoreCpuThreads } from './lib/cpuThreads.js';
 
 /* ─── IndexedDB: Settings + Transkripte (Schema wie bisher, text-only) ─── */
 const SETTINGS_DB_NAME = 'parakeetweb-settings-db';
@@ -31,6 +32,17 @@ async function saveSetting(key, value) {
   try { await idbPut(await getSettingsDb(), SETTINGS_STORE_NAME, STORAGE_KEY_PREFIX + key, value); }
   catch (e) { console.warn(`saveSetting ${key} failed:`, e); }
 }
+// Obergrenze fuer den Thread-Slider: ORTs Heuristik (min(4, ceil(hc/2))) schaetzt
+// physische Kerne. Mehr Threads als physische Kerne sind Oversubscription und
+// bremsen ORTs spin-waitenden WASM-Pool.
+const MAX_CORES = (typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency) && navigator.hardwareConcurrency > 0) ? navigator.hardwareConcurrency : 8;
+const MAX_THREADS = defaultWasmThreads(MAX_CORES);
+
+// Bench/Debug-Hook nur mit ?bench=1 (siehe lib/bench.js). Dynamischer Import,
+// damit das Modul im Normalbetrieb nicht geladen wird.
+const BENCH_ENABLED = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('bench');
+if (BENCH_ENABLED) { import('./lib/bench.js').then(m => m.installBench()).catch(e => console.warn('[bench]', e)); }
+
 function usePersistedSetting(key, value, loaded) {
   useEffect(() => { if (loaded) saveSetting(key, value); }, [key, value, loaded]);
 }
@@ -142,8 +154,8 @@ const STR = {
     perfAudio: 'Audio', perfTotal: 'Gesamt', perfRtf: 'RTF (Verarbeitung/Audio)',
     perfPre: 'Vorverarbeitung', perfEnc: 'Encoder', perfDec: 'Decoder', perfTok: 'Tokenizer',
     perfBackend: 'Backend', perfThreads: 'Threads', perfCoi: 'Cross-Origin-Isolation',
-    perfYes: 'ja', perfNo: 'nein', perfEmpty: 'Noch keine Messwerte – einmal transkribieren.', perfCopy: 'Messwerte kopieren',
-    threadsHint: 'Threads wirken nur mit Cross-Origin-Isolation (LAN/Cloudflare) und nur auf den Encoder; auf GitHub Pages nicht verfügbar (dann 1 Thread). Änderungen greifen erst nach erneutem Modellladen.',
+    perfYes: 'ja', perfNo: 'nein', perfEmpty: 'Noch keine Messwerte – einmal transkribieren.', perfCopy: 'Messwerte kopieren', perfCopyProfile: 'Profil kopieren',
+    threadsHint: 'Threads wirken nur mit Cross-Origin-Isolation (LAN/Cloudflare) und nur auf den Encoder; auf GitHub Pages nicht verfügbar (dann 1 Thread). Höchstens so viele Threads wie physische Kerne. Änderungen greifen erst nach einem vollständigen Seiten-Neuladen (F5).',
     importConfirm: '{n} Einträge importieren? Bestehende Einträge bleiben erhalten.',
     importYes: 'Importieren', importedCount: '{n} Einträge importiert', importInvalid: 'Import fehlgeschlagen – keine gültige Historie-Datei.',
     histTitle: 'Verlauf', histEmpty: 'Noch keine Transkripte.', insertToEditor: 'In Editor laden',
@@ -154,9 +166,9 @@ const STR = {
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', threadsLabel: 'CPU-Threads',
     gpuLabel: 'GPU (WebGPU) verwenden', gpuActive: 'GPU-Backend aktiv',
-    gpuInt4Note: 'WebGPU nutzt immer den int4-Encoder (int8 laeuft nur auf CPU).',
-    reloadNeeded: 'Geänderte Einstellung – Modell neu laden, damit sie wirkt.', reloadNow: 'Modell neu laden',
-    encQuantLabel: 'Encoder-Quantisierung', encQuantHint: 'int4 = kleiner (391 MB), int8 = groesser (~880 MB), auf CPU/WASM oft deutlich schneller. Aenderung greift nach erneutem Modellladen.',
+    gpuInt4Note: 'WebGPU nutzt immer den int4-Encoder (int8 laeuft nur auf CPU). Achtung: In der aktuellen ORT-Version (1.27) rechnet int4 auf WebGPU mit fp16-Akkumulation und liefert teils falsche Texte – bis zum ORT-Update nicht empfehlenswert.',
+    reloadNeeded: 'Geänderte Einstellung – Seite neu laden, damit sie wirkt.', reloadNow: 'Seite neu laden',
+    encQuantLabel: 'Encoder-Quantisierung', encQuantHint: 'int4 = kleiner (391 MB), int8 = groesser (~880 MB), auf CPU/WASM oft deutlich schneller. Aenderung greift nach einem vollstaendigen Seiten-Neuladen (F5).',
     gpuHint: 'Experimentell: Der Encoder läuft auf der GPU, der Decoder auf der CPU. Bei Fehlern automatischer CPU-Fallback; Perf-Logs erscheinen in der Konsole.',
     gpuUnavailable: 'WebGPU ist in diesem Browser/Gerät nicht verfügbar.',
     gpuFallback: 'WebGPU fehlgeschlagen – CPU-Backend aktiv.',
@@ -200,8 +212,8 @@ const STR = {
     perfAudio: 'Audio', perfTotal: 'Total', perfRtf: 'RTF (processing/audio)',
     perfPre: 'Preprocessing', perfEnc: 'Encoder', perfDec: 'Decoder', perfTok: 'Tokenizer',
     perfBackend: 'Backend', perfThreads: 'Threads', perfCoi: 'Cross-origin isolation',
-    perfYes: 'yes', perfNo: 'no', perfEmpty: 'No measurements yet – run a transcription.', perfCopy: 'Copy measurements',
-    threadsHint: 'Threads only take effect with cross-origin isolation (LAN/Cloudflare) and only for the encoder; unavailable on GitHub Pages (1 thread there). Changes apply after reloading the model.',
+    perfYes: 'yes', perfNo: 'no', perfEmpty: 'No measurements yet – run a transcription.', perfCopy: 'Copy measurements', perfCopyProfile: 'Copy profile',
+    threadsHint: 'Threads only take effect with cross-origin isolation (LAN/Cloudflare) and only for the encoder; unavailable on GitHub Pages (1 thread there). At most one thread per physical core. Changes apply only after a full page reload (F5).',
     importConfirm: 'Import {n} entries? Existing entries are kept.',
     importYes: 'Import', importedCount: 'Imported {n} entries', importInvalid: 'Import failed – not a valid history file.',
     histTitle: 'History', histEmpty: 'No transcripts yet.', insertToEditor: 'Insert into editor',
@@ -212,9 +224,9 @@ const STR = {
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', threadsLabel: 'CPU threads',
     gpuLabel: 'Use GPU (WebGPU)', gpuActive: 'GPU backend active',
-    gpuInt4Note: 'WebGPU always uses the int4 encoder (int8 runs on CPU only).',
-    reloadNeeded: 'Setting changed – reload the model for it to take effect.', reloadNow: 'Reload model',
-    encQuantLabel: 'Encoder quantization', encQuantHint: 'int4 = smaller (391 MB), int8 = larger (~880 MB), often much faster on CPU/WASM. Change applies after reloading the model.',
+    gpuInt4Note: 'WebGPU always uses the int4 encoder (int8 runs on CPU only). Warning: with the current ORT version (1.27) int4 on WebGPU accumulates in fp16 and can return wrong text – not recommended until ORT is updated.',
+    reloadNeeded: 'Setting changed – reload the page for it to take effect.', reloadNow: 'Reload page',
+    encQuantLabel: 'Encoder quantization', encQuantHint: 'int4 = smaller (391 MB), int8 = larger (~880 MB), often much faster on CPU/WASM. Change applies after a full page reload (F5).',
     gpuHint: 'Experimental: the encoder runs on the GPU, the decoder on the CPU. Automatic CPU fallback on failure; perf logs appear in the console.',
     gpuUnavailable: 'WebGPU is not available in this browser/device.',
     gpuFallback: 'WebGPU failed – CPU backend active.',
@@ -254,7 +266,8 @@ export default function App() {
   const [autoCopy, setAutoCopy] = useState(false);
   const [enableChunking, setEnableChunking] = useState(true);
   const [chunkDuration, setChunkDuration] = useState(60);
-  const [cpuThreads, setCpuThreads] = useState(4);
+  const [cpuThreads, setCpuThreads] = useState(MAX_THREADS);
+  const [cpuThreadsMigrated, setCpuThreadsMigrated] = useState(false); // einmalige Default-Migration
   const [theme, setTheme] = useState(currentTheme());
   const [showLicenses, setShowLicenses] = useState(false);
   const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
@@ -404,19 +417,22 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [dic, per, ac, ch, cd, ct, hist, ur, gpu, encq] = await Promise.all([
+      const [dic, per, ac, ch, cd, ct, hist, ur, gpu, encq, ctMig] = await Promise.all([
         loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
-        loadSetting('cpuThreads', 4),
+        loadSetting('cpuThreads', MAX_THREADS),
         loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
         loadSetting('useWebGPU', false),
         loadSetting('encoderQuant', 'int4'),
+        loadSetting('cpuThreadsMigrated', false),
       ]);
       setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
-      setCpuThreads(Number(ct) || 4);
+      const restoredThreads = restoreCpuThreads({ stored: Number(ct), migrated: !!ctMig, maxCores: MAX_CORES });
+      setCpuThreads(Math.min(restoredThreads.threads, MAX_THREADS));
+      setCpuThreadsMigrated(restoredThreads.migrationApplied || !!ctMig);
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
       setUseWebGPU(!!gpu);
@@ -431,6 +447,7 @@ export default function App() {
   usePersistedSetting('enableChunking', enableChunking, settingsLoaded);
   usePersistedSetting('chunkDuration', chunkDuration, settingsLoaded);
   usePersistedSetting('cpuThreads', cpuThreads, settingsLoaded);
+  usePersistedSetting('cpuThreadsMigrated', cpuThreadsMigrated, settingsLoaded);
   usePersistedSetting('useWebGPU', useWebGPU, settingsLoaded);
   usePersistedSetting('encoderQuant', encoderQuant, settingsLoaded);
   usePersistedSetting('userDictationRules', userRules, settingsLoaded);
@@ -856,6 +873,15 @@ export default function App() {
                 };
                 try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); flash(tr('copied')); } catch (e) { console.warn(e); }
               }}>{tr('perfCopy')}</button>
+              {BENCH_ENABLED && (
+                <button className="pt-btn ghost" style={{ marginLeft: 8 }} onClick={async () => {
+                  try {
+                    const prof = (typeof window !== 'undefined' && window.__ptProfile) || modelRef.current?.endProfiling?.() || null;
+                    await navigator.clipboard.writeText(JSON.stringify(prof, null, 2));
+                    flash(tr('copied'));
+                  } catch (e) { console.warn(e); }
+                }}>{tr('perfCopyProfile')}</button>
+              )}
             </p>
           </section>
 
@@ -868,13 +894,13 @@ export default function App() {
             <fieldset className="pt-fieldset"><legend>{tr('advanced')}</legend>
               <label className="pt-row"><span>{tr('chunkLabel')}</span><input type="checkbox" checked={enableChunking} onChange={e => setEnableChunking(e.target.checked)} /></label>
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
-              <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label>
+              <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}>{Array.from({ length: MAX_THREADS }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
               <label className="pt-row"><span>{tr('encQuantLabel')}</span><select value={encoderQuant} onChange={e => setEncoderQuant(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="int4">int4 (391 MB)</option><option value="int8">int8 (~880 MB)</option></select></label>
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('encQuantHint')}</p>
               {needsReload && (
                 <p className="pt-warn" style={{ marginTop: 10 }}>
                   <span>{tr('reloadNeeded')}</span>
-                  <button className="pt-btn" onClick={() => loadModel()}>{tr('reloadNow')}</button>
+                  <button className="pt-btn" onClick={() => location.reload()}>{tr('reloadNow')}</button>
                 </p>
               )}
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('threadsHint')}</p>

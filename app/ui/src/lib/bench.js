@@ -1,0 +1,198 @@
+// Gated benchmark/debug hook (`window.__ptBench`). Only installed when the page
+// is opened with `?bench=1` (see the dynamic import guard in App.jsx), so it
+// never exists for normal visitors and adds no weight to the normal bundle.
+//
+// Purpose: the app is microphone-only, so an external harness (scripts/bench-encoder.mjs)
+// has no way to feed a fixed audio buffer and read the engine's per-op timings.
+// This module exposes exactly that, using the SAME load path as loadModel() in
+// App.jsx (getParakeetModel + ParakeetModel.fromUrls) so a benchmark can never
+// drift from what users actually run.
+//
+// Written with the help of Claude Code.
+import { ParakeetModel, getParakeetModel } from 'parakeet.js';
+import { CONFIG } from '../config.js';
+import { openIdb, idbGet, idbPut } from '../../../src/idb.js';
+import { resamplePcmTo16k } from './audio.js';
+
+const SETTINGS_DB_NAME = 'parakeetweb-settings-db';
+const SETTINGS_STORE_NAME = 'settings-store';
+const STORAGE_KEY_PREFIX = 'pw_';
+const getSettingsDb = () => openIdb(SETTINGS_DB_NAME, SETTINGS_STORE_NAME);
+
+/** Read a persisted app setting (same store/prefix as App.jsx). */
+export async function readSetting(key, def) {
+  try {
+    const v = await idbGet(await getSettingsDb(), SETTINGS_STORE_NAME, STORAGE_KEY_PREFIX + key);
+    return v !== undefined ? v : def;
+  } catch { return def; }
+}
+
+/** Write a persisted app setting. Takes effect only after a full page reload. */
+export async function writeSetting(key, value) {
+  await idbPut(await getSettingsDb(), SETTINGS_STORE_NAME, STORAGE_KEY_PREFIX + key, value);
+}
+
+/**
+ * Deterministic pseudo-speech PCM (seeded noise, 16 kHz). The encoder's cost is
+ * content-independent, so a fixed synthetic buffer gives reproducible timings
+ * without shipping an audio fixture.
+ * @param {number} durationSec
+ * @param {number} [sampleRate]
+ * @returns {Float32Array}
+ */
+export function synthPcm(durationSec, sampleRate = 16000) {
+  const n = Math.max(1, Math.round(durationSec * sampleRate));
+  const out = new Float32Array(n);
+  let seed = 0x2f6e2b1;
+  for (let i = 0; i < n; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    out[i] = ((seed / 0x7fffffff) * 2 - 1) * 0.1;
+  }
+  return out;
+}
+
+/** Fetch + decode any browser-decodable audio URL into 16 kHz mono PCM. */
+export async function pcmFromUrl(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`bench: fetch ${url} -> ${resp.status}`);
+  const buf = await resp.arrayBuffer();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  try {
+    const decoded = await ctx.decodeAudioData(buf);
+    const ch = decoded.numberOfChannels > 1
+      ? (() => {
+          const a = decoded.getChannelData(0), b = decoded.getChannelData(1);
+          const m = new Float32Array(a.length);
+          for (let i = 0; i < a.length; i++) m[i] = (a[i] + b[i]) / 2;
+          return m;
+        })()
+      : decoded.getChannelData(0);
+    return await resamplePcmTo16k(Float32Array.from(ch), decoded.sampleRate);
+  } finally {
+    try { await ctx.close(); } catch { /* ignore */ }
+  }
+}
+
+/** Decode a base64-encoded audio file (mp3/wav/…) into 16 kHz mono PCM. */
+export async function pcmFromBase64(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  try {
+    const decoded = await ctx.decodeAudioData(bytes.buffer);
+    const ch = decoded.numberOfChannels > 1
+      ? (() => {
+          const a = decoded.getChannelData(0), b = decoded.getChannelData(1);
+          const m = new Float32Array(a.length);
+          for (let i = 0; i < a.length; i++) m[i] = (a[i] + b[i]) / 2;
+          return m;
+        })()
+      : decoded.getChannelData(0);
+    return await resamplePcmTo16k(Float32Array.from(ch), decoded.sampleRate);
+  } finally {
+    try { await ctx.close(); } catch { /* ignore */ }
+  }
+}
+
+/**
+ * Load the model on the current settings and run N transcriptions.
+ * @param {Object} opts
+ * @param {string} [opts.url]           Audio URL (else synthetic PCM).
+ * @param {string} [opts.pcmBase64]     Base64 audio (else url / synthetic).
+ * @param {number} [opts.durationSec=20] Synthetic audio length when no url.
+ * @param {number} [opts.runs=3]
+ * @param {('int4'|'int8')} [opts.encoderQuant='int4']
+ * @param {number} [opts.cpuThreads=2]
+ * @param {boolean} [opts.enableProfiling=false] Collect ORT per-op profile (slower).
+ * @param {boolean} [opts.chunking=false]        Use the app's chunking defaults.
+ * @returns {Promise<Object>} { runs, env, transcript, profile }
+ */
+export async function measure(opts = {}) {
+  const {
+    url = null, pcmBase64 = null, durationSec = 20, runs = 3,
+    encoderQuant = 'int4', cpuThreads = 2,
+    enableProfiling = false, chunking = false,
+  } = opts;
+  const pcm = pcmBase64 ? await pcmFromBase64(pcmBase64) : (url ? await pcmFromUrl(url) : synthPcm(durationSec));
+  const repoId = CONFIG.VITE_MODEL_REPO || 'efederici/parakeet-tdt-0.6b-v3-onnx-int4';
+  const modelSource = CONFIG.VITE_MODEL_SOURCE || 'local';
+  const modelUrls = await getParakeetModel(repoId, {
+    encoderQuant, decoderQuant: 'int8', preprocessor: 'js', backend: 'wasm',
+    cpuThreads: Number(cpuThreads), progress: () => {},
+    ...(modelSource === 'local' ? { localFallbackBaseUrl: '/models' } : { skipIdbCache: true }),
+    ...(encoderQuant === 'int8' && CONFIG.VITE_MODEL_ENCODER_REPO ? {
+      encoderRepoId: CONFIG.VITE_MODEL_ENCODER_REPO,
+      ...(CONFIG.VITE_MODEL_ENCODER_REVISION ? { encoderRevision: CONFIG.VITE_MODEL_ENCODER_REVISION } : {}),
+      ...(CONFIG.VITE_MODEL_ENCODER_SUBFOLDER ? { encoderSubfolder: CONFIG.VITE_MODEL_ENCODER_SUBFOLDER } : {}),
+      ...(CONFIG.VITE_MODEL_ENCODER_FILE ? { encoderFilename: CONFIG.VITE_MODEL_ENCODER_FILE } : {}),
+    } : {}),
+    ...(CONFIG.VITE_MODEL_DECODER_REPO ? {
+      decoderRepoId: CONFIG.VITE_MODEL_DECODER_REPO,
+      ...(CONFIG.VITE_MODEL_DECODER_REVISION ? { decoderRevision: CONFIG.VITE_MODEL_DECODER_REVISION } : {}),
+      ...(CONFIG.VITE_MODEL_DECODER_SUBFOLDER ? { decoderSubfolder: CONFIG.VITE_MODEL_DECODER_SUBFOLDER } : {}),
+      ...(CONFIG.VITE_MODEL_DECODER_FILE ? { decoderFilename: CONFIG.VITE_MODEL_DECODER_FILE } : {}),
+    } : {}),
+    ...(CONFIG.VITE_MODEL_REVISION ? { revision: CONFIG.VITE_MODEL_REVISION } : {}),
+  });
+  const nMels = modelUrls.modelConfig?.featuresSize || 128;
+  const model = await ParakeetModel.fromUrls({
+    ...modelUrls.urls, filenames: modelUrls.filenames, backend: 'wasm',
+    cpuThreads: Number(cpuThreads), preprocessorBackend: modelUrls.preprocessorBackend, nMels,
+    collectTimings: true, enableProfiling,
+  });
+  const runMetrics = [];
+  let transcript = '';
+  for (let i = 0; i < runs; i++) {
+    const res = await model.transcribeChunked(pcm, 16000, {
+      enableChunking: chunking, chunkDurationSec: 60, overlapSec: 2,
+      returnTimestamps: false, temperature: 0, beamWidth: 1, frameStride: 8,
+      enableProfiling,
+    });
+    transcript = res.utterance_text || '';
+    runMetrics.push({
+      ...res.metrics,
+      backend: 'wasm',
+      numThreads: (model.ort && model.ort.env && model.ort.env.wasm && model.ort.env.wasm.numThreads) ?? null,
+      crossOriginIsolated: typeof window !== 'undefined' && !!window.crossOriginIsolated,
+    });
+  }
+  const profile = enableProfiling ? model.endProfiling() : null;
+  if (profile) window.__ptProfile = profile;
+  try { model.release?.(); } catch { /* ignore */ }
+  return {
+    runs: runMetrics,
+    transcript,
+    profile,
+    env: {
+      crossOriginIsolated: typeof window !== 'undefined' && !!window.crossOriginIsolated,
+      ortWasmThreads: (typeof globalThis !== 'undefined' && globalThis.ort && globalThis.ort.env && globalThis.ort.env.wasm) ? (globalThis.ort.env.wasm.numThreads ?? null) : null,
+      hardwareConcurrency: (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) ?? null,
+      modelSource, modelRepo: repoId, encoderQuant, cpuThreads: Number(cpuThreads),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    },
+  };
+}
+
+/** Return the most recent per-op profile collected by a measure({enableProfiling:true}). */
+export function profile() {
+  return window.__ptProfile || null;
+}
+
+/** Install the hook on window (idempotent). */
+export function installBench() {
+  if (typeof window === 'undefined') return;
+  window.__ptBench = {
+    version: 1,
+    readSetting, writeSetting, measure, profile,
+    synthPcm, pcmFromUrl, pcmFromBase64,
+    async setConfig({ encoderQuant, cpuThreads, useWebGPU = false } = {}) {
+      if (encoderQuant !== undefined) await writeSetting('encoderQuant', encoderQuant);
+      if (cpuThreads !== undefined) await writeSetting('cpuThreads', Number(cpuThreads));
+      await writeSetting('useWebGPU', !!useWebGPU);
+    },
+  };
+  console.log('[bench] window.__ptBench installed');
+}
