@@ -48,6 +48,10 @@ Upgrade 1.27.0 → 1.30.0 gemergt (Branch `ort-1.30-upgrade`, Re-Vendoring mit R
 **Kein messbarer Performance-Delta** (encode ~580 ms/Audio-s auf 1.27 vs. ~618 ms/Audio-s auf 1.30; durch
 unterschiedliche Clip-Längen konfundiert, Transkript korrekt). Nutzen: **Sicherheitsfixes** (u. a. Härtung beim
 Modell-Laden, `MatMulNBits`-Bounds, Graph-Optimizer/QDQ-Härtung). `public/ort` wuchs 76 → 83 MB.
+**Service Worker:** Runtime-Assets (`/ort/`, `/ffmpeg/`) sind jetzt **pro Build versioniert**, der Modell-Cache hat eine
+**Generation** (`pt-models-v2`); der Activate-Handler löscht alte Generationen aller drei Familien. Grund: der ORT-Upgrade
+ändert die Bytes bei **gleichen Dateinamen**, und ein cache-first Treffer hätte die sha384-Prüfung im PROD-Build hart
+scheitern lassen (Modell lädt nicht). Modell-Generation bei jedem Modelldatei-Wechsel manuell hochziehen.
 **UI:** WebGPU-Schalter und Encoder-Quantisierung sind vorübergehend **ausgeblendet** und auf `useWebGPU=false`
 bzw. `encoderQuant='int4'` festgelegt (Persistenz heilt alte Werte beim Boot). Engine-Pfad und i18n-Keys bleiben,
 Reaktivierung = 2 JSX-Zeilen. WebGPU-EP-Optionen an 1.30 angepasst (`{name:'webgpu'}`, Legacy-Felder entfernt).

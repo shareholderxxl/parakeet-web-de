@@ -5,6 +5,10 @@
  * ändert sich der sw.js-Inhalt bei jedem Build -> der Browser erkennt das
  * Update zuverlässig, und install/activate können ohne Netz-Roundtrip arbeiten.
  *
+ * Runtime-Assets (/ort/, /ffmpeg/) sind pro Build versioniert, Modell-Dateien
+ * generationiert (siehe MODELS_CACHE unten) — so koennen sich Runtime- und
+ * Modell-Updates nie hinter einem cache-first Treffer verstecken.
+ *
  * Modell-Dateien werden cache-first in Cache Storage gehalten, damit die App
  * samt Modell offline funktioniert — sowohl der eigene Mirror (/models/, LAN,
  * Quelle 'local') als auch HuggingFace (huggingface.co/<repo>/resolve/…, Quelle
@@ -16,8 +20,19 @@ const BUILD_VERSION = '__BUILD_VERSION__';
 const PRECACHE = __PRECACHE__;
 
 const SHELL_CACHE = 'pt-shell-' + BUILD_VERSION;
-const RUNTIME_CACHE = 'pt-runtime-v1';
-const MODELS_CACHE = 'pt-models-v1';
+// Runtime-Assets (ORT/ffmpeg) sind pro Build versioniert. Ihre Dateinamen
+// aendern sich bei Upgrades NICHT (z. B. ort-wasm-simd-threaded.jsep.wasm),
+// aber backend.js prueft die Bytes gegen das neue /ort/manifest.json: ein
+// cache-first Treffer mit den ALTEN Bytes liesse den PROD-Build hart scheitern
+// ("ORT integrity check failed"). Versionierung per Build erzwingt frische
+// Bytes (~28 MB pro Deploy).
+const RUNTIME_CACHE = 'pt-runtime-' + BUILD_VERSION;
+// Modell-Dateien sind gross (~400 MB), daher NICHT pro Build versioniert.
+// Bei jeder Aenderung an ausgelieferten Modelldateien die Generation hier
+// hochziehen ('pt-models-v2' -> 'v3'); der Activate-Handler loescht dann die
+// alte Generation, damit der Browser die neuen Bytes laedt.
+const MODELS_CACHE = 'pt-models-v2';
+const CACHE_FAMILIES = ['pt-shell-', 'pt-runtime-', 'pt-models-'];
 const OFFLINE_FALLBACK = '/index.html';
 const NETWORK_TIMEOUT_MS = 3500;
 const RUNTIME_PREFIXES = ['/ort/', '/ffmpeg/'];
@@ -36,8 +51,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
+    const current = new Set([SHELL_CACHE, RUNTIME_CACHE, MODELS_CACHE]);
     await Promise.all(keys.map((k) => {
-      if (k.startsWith('pt-shell-') && k !== SHELL_CACHE) return caches.delete(k);
+      // Alte Generationen aller drei Familien loeschen (Shell, Runtime, Modelle).
+      if (CACHE_FAMILIES.some((p) => k.startsWith(p)) && !current.has(k)) return caches.delete(k);
       return null;
     }));
     await self.clients.claim();
