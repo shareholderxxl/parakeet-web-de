@@ -10,7 +10,11 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { ParakeetModel, executionProvidersFor } from '../../app/src/parakeet.js';
 
-const WEBGPU_EP = { name: 'webgpu', deviceType: 'gpu', powerPreference: 'high-performance' };
+// ORT 1.30 dropped the legacy device-selection fields (`deviceType`,
+// `powerPreference`); the WebGPU EP now picks its own adapter. The EP option
+// object is intentionally minimal so we never ship options the installed
+// runtime does not understand.
+const WEBGPU_EP = { name: 'webgpu' };
 
 describe('executionProvidersFor', () => {
   test('webgpu-hybrid is the webgpu EP with a wasm fallback', () => {

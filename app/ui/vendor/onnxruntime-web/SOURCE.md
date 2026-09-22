@@ -1,9 +1,9 @@
 # Vendored onnxruntime-web
 
 - Package: `onnxruntime-web`
-- Version: `1.27.0`
-- Source: https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.27.0.tgz
-- Tarball SHA-256: `b59c9819434a7519f334f77e8d4bf22b69808d531a57724cabc4bb2c0704c835`
+- Version: `1.30.0`
+- Source: https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.30.0.tgz
+- Tarball SHA-256: `d2228df7e4616bc3348bf504ee888f3bec43789a273f0a63f3e68d203ce3bf71`
 - License: MIT (see upstream `package.json`; LICENSE not shipped in tarball)
 
 Vendored to keep the UI's runtime supply chain auditable: no install-time fetch,

@@ -39,7 +39,16 @@ export function buildExternalData(source, modelFilename) {
  * @returns {Array<string|object>} executionProviders for InferenceSession.create.
  */
 export function executionProvidersFor(backend) {
-  const webgpuEp = { name: 'webgpu', deviceType: 'gpu', powerPreference: 'high-performance' };
+  // ORT 1.30 dropped the legacy WebGPU device-selection fields
+  // (`deviceType`, `powerPreference`); they are silently ignored now, and the
+  // WebGPU EP selects its adapter itself (or takes a `device` GPUDevice we do
+  // not create). Keep the EP option object minimal so we never ship options the
+  // installed runtime does not understand.
+  // NOTE: `enableMatmulFp32Accumulation` (the int4/fp16 accumulation fix) is
+  // NOT usable here: it is read by the native WebGPU EP only, and the
+  // onnxruntime-web JSEP backend ignores it (ORT docs, js/common
+  // inference-session.ts). The browser int4 path stays experimental.
+  const webgpuEp = { name: 'webgpu' };
   if (backend === 'webgpu-hybrid') return [webgpuEp, 'wasm'];
   if (backend === 'webgpu-strict') return [webgpuEp];
   if (backend === 'wasm') return ['wasm'];
