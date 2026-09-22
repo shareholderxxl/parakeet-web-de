@@ -271,8 +271,8 @@ export default function App() {
   const [theme, setTheme] = useState(currentTheme());
   const [showLicenses, setShowLicenses] = useState(false);
   const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
-  const [useWebGPU, setUseWebGPU] = useState(false); // experimentell, Default AUS
-  const [encoderQuant, setEncoderQuant] = useState('int4'); // 'int4' | 'int8'
+  const [useWebGPU, setUseWebGPU] = useState(false); // voruebergehend fest AUS (UI ausgeblendet, s. Settings)
+  const [encoderQuant, setEncoderQuant] = useState('int4'); // voruebergehend fest int4 (UI ausgeblendet)
   const [gpuFallback, setGpuFallback] = useState(false); // WebGPU fehlgeschlagen -> CPU aktiv
   const [webgpuAdapter, setWebgpuAdapter] = useState(undefined); // undefined=unbekannt, true/false
   const [loadedEnv, setLoadedEnv] = useState(null); // {backend, encoderQuant, cpuThreads} des geladenen Modells
@@ -417,15 +417,13 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [dic, per, ac, ch, cd, ct, hist, ur, gpu, encq, ctMig] = await Promise.all([
+      const [dic, per, ac, ch, cd, ct, hist, ur, ctMig] = await Promise.all([
         loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
         loadSetting('cpuThreads', MAX_THREADS),
         loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
-        loadSetting('useWebGPU', false),
-        loadSetting('encoderQuant', 'int4'),
         loadSetting('cpuThreadsMigrated', false),
       ]);
       setDictationEnabled(!!dic); setPersistTranscripts(!!per);
@@ -435,8 +433,12 @@ export default function App() {
       setCpuThreadsMigrated(restoredThreads.migrationApplied || !!ctMig);
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
-      setUseWebGPU(!!gpu);
-      setEncoderQuant(encq === 'int8' ? 'int8' : 'int4');
+      // WebGPU + Encoder-Quant sind voruebergehend ausgeblendet: fest auf die
+      // sicheren Werte. usePersistedSetting() unten schreibt sie zurueck, so
+      // dass ein frueher gespeichertes useWebGPU:true / encoderQuant:'int8'
+      // beim naechsten Boot ueberschrieben wird (Selbstheilung).
+      setUseWebGPU(false);
+      setEncoderQuant('int4');
       setSettingsLoaded(true);
       applyThemeToDom(currentTheme());
     })();
@@ -895,8 +897,9 @@ export default function App() {
               <label className="pt-row"><span>{tr('chunkLabel')}</span><input type="checkbox" checked={enableChunking} onChange={e => setEnableChunking(e.target.checked)} /></label>
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}>{Array.from({ length: MAX_THREADS }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
-              <label className="pt-row"><span>{tr('encQuantLabel')}</span><select value={encoderQuant} onChange={e => setEncoderQuant(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="int4">int4 (391 MB)</option><option value="int8">int8 (~880 MB)</option></select></label>
-              <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('encQuantHint')}</p>
+              {/* Encoder-Quantisierung voruebergehend ausgeblendet (2026-09-22):
+                  int4 und int8 messen praktisch gleich schnell, int4 ist kleiner.
+                  Wert ist auf 'int4' festgelegt (State + Persistenz unten). */}
               {needsReload && (
                 <p className="pt-warn" style={{ marginTop: 10 }}>
                   <span>{tr('reloadNeeded')}</span>
@@ -904,10 +907,10 @@ export default function App() {
                 </p>
               )}
               <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('threadsHint')}</p>
-              <label className="pt-row"><span>{tr('gpuLabel')}</span><input type="checkbox" checked={useWebGPU} onChange={e => { setUseWebGPU(e.target.checked); setGpuFallback(false); }} /></label>
-              <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{(webgpuAvailable && webgpuAdapter !== false) ? tr('gpuHint') : tr('gpuUnavailable')}</p>
-              {useWebGPU && <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('gpuInt4Note')}</p>}
-              {gpuFallback && <p className="pt-error" role="status">{tr('gpuFallback')}</p>}
+              {/* WebGPU-Schalter voruebergehend ausgeblendet (2026-09-22): der
+                  int4-Encoder liefert im JSEP-Backend von onnxruntime-web falsche
+                  Texte (fp16-Akkumulation; der Fix greift nur im nativen EP).
+                  Wert ist fest AUS (State + Persistenz unten). */}
             </fieldset>
             <fieldset className="pt-fieldset"><legend>{tr('customRules')}</legend>
               <p className="pt-muted" style={{ marginBottom: 10 }}>{tr('customRulesHint')}</p>

@@ -43,6 +43,15 @@
 | 18 | **Encoder-Performance / Thread-Skalierung** | Encoder ~0,5× Echtzeit (i5-10310U, 4C/8T) und ohne Skalierung über die Thread-Zahl. Ursache belegt: ORT liest `env.wasm.numThreads` **nur einmal pro Seitenaufruf** → Thread-Slider wirkte nie ohne Full-Reload; Slider erlaubte zudem 8 Threads auf 4 Kernen (Oversubscription). | ✅ umgesetzt (2026-09-21) — Slider auf `defaultWasmThreads()` gedeckelt + Legacy-Migration aktiviert, Reload-Hinweis auf „Seite neu laden", gated Bench-Hook `?bench=1` + `scripts/bench-encoder.mjs` (frischer Context pro Config, `numThreads`-Gültigkeitsgate, per-Op-Profil). **Wirkung gemessen (2026-09-22, i5-10310U):** 2t ≈ 8777 ms, 4t ≈ 7489 ms → +17 %; Threadzahl wirkt jetzt, Sättigung erst bei 4 (nicht mehr bei 2). |
 | 17 | **Schneller Decoder + Performance-Anzeige** | Stock-Decoder (efederici) hatte keine in-graph `lse`/`topk`-Ausgänge → teurer JS-Log-Partition-Pfad pro Decode-Schritt (thread-/GPU-unabhängig). Fix: optimierter int8-Decoder (Olicorne `int8/`) zum int4-Encoder; Timings im Statistik-Reiter (Encode/Decode/RTF/Backend/Threads). | ✅ umgesetzt (2026-09-21) — LAN-Decoder getauscht, Pages-Decoder-Override in `config.js`; Messwerte im Statistik-Reiter |
 
+### onnxruntime-web 1.30.0 (2026-09-22)
+Upgrade 1.27.0 → 1.30.0 gemergt (Branch `ort-1.30-upgrade`, Re-Vendoring mit Registry-SRI-Prüfung).
+**Kein messbarer Performance-Delta** (encode ~580 ms/Audio-s auf 1.27 vs. ~618 ms/Audio-s auf 1.30; durch
+unterschiedliche Clip-Längen konfundiert, Transkript korrekt). Nutzen: **Sicherheitsfixes** (u. a. Härtung beim
+Modell-Laden, `MatMulNBits`-Bounds, Graph-Optimizer/QDQ-Härtung). `public/ort` wuchs 76 → 83 MB.
+**UI:** WebGPU-Schalter und Encoder-Quantisierung sind vorübergehend **ausgeblendet** und auf `useWebGPU=false`
+bzw. `encoderQuant='int4'` festgelegt (Persistenz heilt alte Werte beim Boot). Engine-Pfad und i18n-Keys bleiben,
+Reaktivierung = 2 JSX-Zeilen. WebGPU-EP-Optionen an 1.30 angepasst (`{name:'webgpu'}`, Legacy-Felder entfernt).
+
 ## Empfohlene Reihenfolge (bei Fortsetzung)
 
 2 ✅ → 3 ✅ → **1 (Datei-Transkription)** → **4 (PWA)**; 5 jederzeit einschiebbar.
