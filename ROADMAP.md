@@ -56,19 +56,25 @@ scheitern lassen (Modell lädt nicht). Modell-Generation bei jedem Modelldatei-W
 bzw. `encoderQuant='int4'` festgelegt (Persistenz heilt alte Werte beim Boot). Engine-Pfad und i18n-Keys bleiben,
 Reaktivierung = 2 JSX-Zeilen. WebGPU-EP-Optionen an 1.30 angepasst (`{name:'webgpu'}`, Legacy-Felder entfernt).
 
-### Experiment-Branch `canary-web` — Canary-180M als zweite Modellfamilie
-NVIDIA **Canary-180M-Flash** (AED: FastConformer-Encoder + Transformer-Decoder, CC-BY-4.0, en/de/es/fr) als
-umschaltbares Modell in der Web-App. Quelle: `istupakov/canary-180m-flash-onnx` (int8: Encoder 133,7 MB +
-Decoder 79,5 MB), LAN-Mirror `/models-canary/`. Parakeet bleibt Default; kein Pages-/VPS-Deploy.
-
-- **M0 (fertig):** `CanaryEncoder` + `__ptBench.measureCanary()` (Encoder-only-Gate, ≥1,3× schneller als Parakeet?).
-- **M1/M3 (fertig, im Branch):** `CanaryModel` (AED-Greedy mit `decoder_mems`-KV-Cache), `CanaryTokenizer`
-  (`▁`→Space, Prompt `<|startofcontext|>…`, EOS `<|endoftext|>`), Modell-Dropdown in Einstellungen → Erweitert
-  (Sprache de/en/es/fr, PnC an/aus), Statistik-Env `modelFamily`.
-- **Erwartung offen:** kleinerer Encoder (180M vs 0,6B), aber autoregressiver Decoder → Tempo kann besser ODER
-  schlechter als Parakeet sein. **Client-Test nötig** (Wyse lädt keine Modelle).
-- **Abbruch:** wenn Encoder < 1,3× schneller, RTF nicht besser oder DE-Qualität schlechter → Branch verwerfen.
-- Feature-Grenzen v1: nur Transkription (keine Übersetzung, keine Timestamps, keine Chunk-Parallelität), 4 Sprachen.
+> ### `canary-web` — Canary-180M als zweite Modellfamilie (gemergt 2026-09-25)
+> NVIDIA **Canary-180M-Flash** (AED: FastConformer-Encoder + Transformer-Decoder, CC-BY-4.0, en/de/es/fr) ist
+> als **opt-in** wählbar (Einstellungen → Erweitert → **Modell**; Parakeet bleibt Default). Quelle:
+> `istupakov/canary-180m-flash-onnx` (int8: Encoder 133,7 MB + Decoder 79,5 MB), LAN-Mirror `/models-canary/`.
+>
+> **Messung (i5-10310U, 15,89 s Audio, 4 Threads, WASM):** encode **1.547 ms (97 ms/Audio-s)** — ~6× schneller
+> als Parakeet (~580–620 ms/Audio-s); decode **5.755 ms für 69 Tokens (12 Tok/s)**; **RTF 0,46** (Parakeet ~0,60).
+> ⇒ Encoder-Gate klar bestanden; **Decoder ist der neue Flaschenhals** (Cross-Attention-K/V wird im Export pro
+> Token über den ganzen Encoder-Output neu projiziert, O(Tokens × Tenc); onnx-asr hat dasselbe Profil) → bei
+> kurzen Diktaten gewinnt Canary, bei sehr langen Aufnahmen könnte Parakeet aufholen.
+>
+> **Umfang v1:** nur **Transkription** (Sprache de/en/es/fr, PnC an/aus). **Übersetzung (AST) wird nicht
+> angeboten** — im Test schlechte Ergebnisse, und der Support ist nicht implementiert (kein `target_language` in
+> der UI). Keine Timestamps, keine Chunk-Parallelität.
+>
+> **Technik:** `app/src/canary.js` (AED-Greedy mit `decoder_mems`-KV-Cache), `app/src/canary-encoder.js`,
+> `app/src/tokenizer-canary.js` (▁→Space, Detok-Regex wie onnx-asr), Modell-Dropdown + `modelFamily` im
+> Messbericht; `__ptBench.measureCanary`/`transcribeCanary` + `/fixtures/`-Route für Golden-Tests.
+> Verifiziert: Unit 25/25, headless Suiten grün, Root-Baseline unverändert.
 
 ## Empfohlene Reihenfolge (bei Fortsetzung)
 
