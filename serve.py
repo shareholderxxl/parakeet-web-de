@@ -58,6 +58,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return str(MODELS_CANARY / path[len("/models-canary/"):])
         if path.startswith("/models/"):
             return str(MODELS / path[len("/models/"):])
+        # /fixtures/*  ->  test/fixtures/*  (Benchmarks: JFK-Golden-Text)
+        if path.startswith("/fixtures/"):
+            return str(ROOT / "test" / "fixtures" / path[len("/fixtures/"):])
         if path.startswith("/dictation-regex/"):
             return str(ROOT / "app" / "ui" / "public" / path[1:])
         if path.startswith("/config.js"):

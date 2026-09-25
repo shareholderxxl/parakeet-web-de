@@ -9,7 +9,7 @@
 // drift from what users actually run.
 //
 // Written with the help of Claude Code.
-import { ParakeetModel, getParakeetModel, CanaryEncoder } from 'parakeet.js';
+import { ParakeetModel, getParakeetModel, CanaryEncoder, CanaryModel } from 'parakeet.js';
 import { CONFIG } from '../config.js';
 import { openIdb, idbGet, idbPut } from '../../../src/idb.js';
 import { resamplePcmTo16k } from './audio.js';
@@ -193,6 +193,58 @@ export async function measure(opts = {}) {
  * @param {string} [opts.encoderUrl='/models-canary/encoder-model.int8.onnx']
  * @returns {Promise<Object>} { runs, env }
  */
+/**
+ * Full Canary transcription for an objective correctness check (M1 golden test).
+ * Loads the Canary model from the LAN mirror (or HF when the config says
+ * 'remote') and transcribes one clip, so the text can be compared to a known
+ * reference (e.g. `/fixtures/jfk.mp3` -> `jfk.expected.txt` in English).
+ *
+ * @param {Object} opts
+ * @param {string} [opts.url]        Audio URL (e.g. '/fixtures/jfk.mp3').
+ * @param {string} [opts.pcmBase64]  Base64 audio.
+ * @param {number} [opts.durationSec] Synthetic audio when no url/base64.
+ * @param {string} [opts.language='en']
+ * @param {string} [opts.targetLanguage]
+ * @param {boolean} [opts.pnc=true]
+ * @param {number} [opts.cpuThreads=4]
+ * @returns {Promise<{text:string, ids:number[], metrics:object, env:object}>}
+ */
+export async function transcribeCanary(opts = {}) {
+  const {
+    url = null, pcmBase64 = null, durationSec = null,
+    language = 'en', targetLanguage = null, pnc = true, cpuThreads = 4,
+  } = opts;
+  const pcm = pcmBase64 ? await pcmFromBase64(pcmBase64)
+    : (url ? await pcmFromUrl(url) : synthPcm(durationSec || 5));
+  const repo = CONFIG.VITE_CANARY_REPO || 'istupakov/canary-180m-flash-onnx';
+  const source = CONFIG.VITE_MODEL_SOURCE || 'local';
+  const base = CONFIG.VITE_CANARY_LOCAL_BASE || '/models-canary/';
+  const u = (f) => (source === 'local'
+    ? base.replace(/\/?$/, '/') + f
+    : `https://huggingface.co/${repo}/resolve/main/${f}`);
+  const model = await CanaryModel.fromUrls({
+    encoderUrl: u('encoder-model.int8.onnx'),
+    decoderUrl: u('decoder-model.int8.onnx'),
+    vocabUrl: u('vocab.txt'),
+    cpuThreads: Number(cpuThreads),
+  });
+  try {
+    const res = await model.transcribe(pcm, { language, targetLanguage, pnc });
+    return {
+      text: res.text,
+      ids: res.ids,
+      metrics: res.metrics,
+      env: {
+        model: 'canary-180m-flash', audioSec: +(pcm.length / 16000).toFixed(2),
+        language, targetLanguage, pnc, cpuThreads: Number(cpuThreads), source,
+        crossOriginIsolated: typeof window !== 'undefined' && !!window.crossOriginIsolated,
+      },
+    };
+  } finally {
+    try { model.release(); } catch { /* ignore */ }
+  }
+}
+
 export async function measureCanary(opts = {}) {
   const {
     durationSec = 20, pcmBase64 = null, url = null, runs = 2, cpuThreads = 4,
@@ -320,7 +372,7 @@ export function installBench() {
   if (typeof window === 'undefined') return;
   window.__ptBench = {
     version: 1,
-    readSetting, writeSetting, measure, measureCanary, profile,
+    readSetting, writeSetting, measure, measureCanary, transcribeCanary, profile,
     synthPcm, pcmFromUrl, pcmFromBase64, runMatrix, resumeMatrix,
     async setConfig({ encoderQuant, cpuThreads, useWebGPU = false } = {}) {
       if (encoderQuant !== undefined) await writeSetting('encoderQuant', encoderQuant);
