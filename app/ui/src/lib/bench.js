@@ -9,7 +9,7 @@
 // drift from what users actually run.
 //
 // Written with the help of Claude Code.
-import { ParakeetModel, getParakeetModel } from 'parakeet.js';
+import { ParakeetModel, getParakeetModel, CanaryEncoder } from 'parakeet.js';
 import { CONFIG } from '../config.js';
 import { openIdb, idbGet, idbPut } from '../../../src/idb.js';
 import { resamplePcmTo16k } from './audio.js';
@@ -176,6 +176,49 @@ export async function measure(opts = {}) {
   };
 }
 
+/**
+ * Encoder-only measurement for the Canary-180M experiment (branch `canary-web`).
+ * Loads ONLY the FastConformer encoder from the LAN mirror (int8, ~134 MB), runs
+ * the shared NeMo mel preprocessor, and reports per-run preprocess/encode times
+ * plus the output shape (sanity: `[1, Tenc, D]`, no NaNs). No decoder yet, so
+ * this is the M0 gate: if the Canary encoder is not clearly faster than
+ * Parakeet's, the branch stops here.
+ *
+ * @param {Object} opts
+ * @param {number} [opts.durationSec=20] Synthetic audio length (else url/pcmBase64).
+ * @param {string} [opts.pcmBase64]      Base64 audio (else url / synthetic).
+ * @param {string} [opts.url]            Audio URL.
+ * @param {number} [opts.runs=2]
+ * @param {number} [opts.cpuThreads=4]
+ * @param {string} [opts.encoderUrl='/models-canary/encoder-model.int8.onnx']
+ * @returns {Promise<Object>} { runs, env }
+ */
+export async function measureCanary(opts = {}) {
+  const {
+    durationSec = 20, pcmBase64 = null, url = null, runs = 2, cpuThreads = 4,
+    encoderUrl = '/models-canary/encoder-model.int8.onnx',
+  } = opts;
+  const pcm = pcmBase64 ? await pcmFromBase64(pcmBase64) : (url ? await pcmFromUrl(url) : synthPcm(durationSec));
+  const enc = await CanaryEncoder.fromUrls({ encoderUrl, backend: 'wasm', cpuThreads: Number(cpuThreads) });
+  const runMetrics = [];
+  try {
+    for (let i = 0; i < runs; i++) runMetrics.push(await enc.encode(pcm));
+  } finally {
+    try { enc.release(); } catch { /* ignore */ }
+  }
+  return {
+    runs: runMetrics,
+    env: {
+      model: 'canary-180m-flash',
+      encoderUrl,
+      audioSec: pcm.length / 16000,
+      cpuThreads: Number(cpuThreads),
+      crossOriginIsolated: typeof window !== 'undefined' && !!window.crossOriginIsolated,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    },
+  };
+}
+
 /** Return the most recent per-op profile collected by a measure({enableProfiling:true}). */
 export function profile() {
   return window.__ptProfile || null;
@@ -277,7 +320,7 @@ export function installBench() {
   if (typeof window === 'undefined') return;
   window.__ptBench = {
     version: 1,
-    readSetting, writeSetting, measure, profile,
+    readSetting, writeSetting, measure, measureCanary, profile,
     synthPcm, pcmFromUrl, pcmFromBase64, runMatrix, resumeMatrix,
     async setConfig({ encoderQuant, cpuThreads, useWebGPU = false } = {}) {
       if (encoderQuant !== undefined) await writeSetting('encoderQuant', encoderQuant);

@@ -23,6 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "app" / "ui" / "dist"
 MODELS = Path(os.environ.get("LOCAL_MODEL_PATH", ROOT / "models")).resolve()
+# Experiment-Branch canary-web: Canary-180M-Modell (int8) separat vom Parakeet-Mirror.
+MODELS_CANARY = Path(os.environ.get("CANARY_MODEL_PATH", ROOT / "models-canary")).resolve()
 PORT = int(os.environ.get("PORT", 8787))
 
 MIME = {
@@ -51,6 +53,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
         # /models/*  ->  MODELS/*
         path = path.split("?", 1)[0].split("#", 1)[0]
+        # /models-canary/*  ->  MODELS_CANARY/*  (Canary-180M, getrennter Mirror)
+        if path.startswith("/models-canary/"):
+            return str(MODELS_CANARY / path[len("/models-canary/"):])
         if path.startswith("/models/"):
             return str(MODELS / path[len("/models/"):])
         if path.startswith("/dictation-regex/"):
