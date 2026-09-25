@@ -1,0 +1,35 @@
+# portabletranscribe: Caddy-Site-Vorlage.
+# Wird von scripts/deploy-vps.sh gerendert (Platzhalter: Hostname, Wurzelverzeichnis, Auth-Block).
+# Ablage auf dem Server: /etc/caddy/sites.d/portabletranscribe.caddy
+{HOST} {
+{AUTH_BLOCK}	@compressible not path /models/*
+	encode @compressible zstd gzip
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Resource-Policy "same-origin"
+		-Server
+	}
+	@wasm path *.wasm
+	header @wasm Content-Type "application/wasm"
+	@webmanifest path *.webmanifest
+	header @webmanifest Content-Type "application/manifest+json"
+	@onnx path *.onnx
+	header @onnx Content-Type "application/octet-stream"
+	root * {ROOT}
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	header /config.js Cache-Control "no-store"
+	header /index.html Cache-Control "no-cache, must-revalidate"
+	header /sw.js Cache-Control "no-cache, must-revalidate"
+	header /manifest.webmanifest Cache-Control "no-cache, must-revalidate"
+	header /models/* Cache-Control "public, max-age=86400, must-revalidate"
+	handle_path /models/* {
+		root * {ROOT}/models
+		file_server {
+			precompressed zstd
+		}
+	}
+	handle {
+		file_server
+	}
+}

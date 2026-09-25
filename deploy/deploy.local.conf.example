@@ -1,0 +1,23 @@
+# Vorlage: kopieren nach deploy.local.conf (gitignored) und anpassen.
+# Wird von scripts/deploy-vps.sh eingelesen (Shell-Syntax).
+
+VPS_TARGET=root@202.61.225.208
+VPS_HOSTNAME=transcribe.202-61-225-208.sslip.io
+VPS_ROOT=/var/www/portabletranscribe
+SSH_KEY=$HOME/.ssh/doko_vps
+
+# Modell: wird bei --with-models serverseitig von HuggingFace geladen.
+MODEL_REPO=efederici/parakeet-tdt-0.6b-v3-onnx-int4
+MODEL_FILES="config.json vocab.txt nemo128.int8.onnx decoder_joint-model.int8.onnx encoder-model.int4.onnx"
+# Zusaetzliche Modelldateien: repo|pfad-im-repo|zielname (int8-Encoder als Option)
+MODEL_EXTRA="Olicorne/parakeet-tdt-0.6b-v3-optimized-onnx|istupakov_smoothquant/int8/encoder-model.int8.onnx|encoder-model.int8.onnx"
+
+# --- GitHub Pages (scripts/deploy-pages.sh) ---
+PAGES_REPO=https://github.com/shareholderxxl/shareholderxxl.github.io.git
+PAGES_DIR=$HOME/.cache/portabletranscribe-pages
+PAGES_BRANCH=main
+PAGES_MODEL_REPO=efederici/parakeet-tdt-0.6b-v3-onnx-int4
+PAGES_MODEL_REVISION=main
+PAGES_MODEL_DECODER_REPO=Olicorne/parakeet-tdt-0.6b-v3-optimized-onnx
+PAGES_MODEL_DECODER_SUBFOLDER=int8
+PAGES_MODEL_DECODER_FILE=decoder_joint-model.int8.onnx
