@@ -14,6 +14,7 @@
 #   PAGES_BRANCH=main
 #   PAGES_MODEL_REPO=efederici/parakeet-tdt-0.6b-v3-onnx-int4
 #   PAGES_MODEL_REVISION=main
+#   PAGES_CANARY_REPO=istupakov/canary-180m-flash-onnx
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,6 +39,9 @@ PAGES_MODEL_DECODER_FILE="${PAGES_MODEL_DECODER_FILE:-decoder_joint-model.int8.o
 PAGES_MODEL_ENCODER_REPO="${PAGES_MODEL_ENCODER_REPO:-Olicorne/parakeet-tdt-0.6b-v3-optimized-onnx}"
 PAGES_MODEL_ENCODER_SUBFOLDER="${PAGES_MODEL_ENCODER_SUBFOLDER:-int8}"
 PAGES_MODEL_ENCODER_FILE="${PAGES_MODEL_ENCODER_FILE:-encoder-model.int8.onnx}"
+# Canary-180M (zweite Modellfamilie, opt-in). Pages laedt sie von HuggingFace;
+# kein Extra-Hosting, der Service Worker cached die HF-URLs wie die Parakeet-Gewichte.
+PAGES_CANARY_REPO="${PAGES_CANARY_REPO:-istupakov/canary-180m-flash-onnx}"
 
 DIST="$REPO_ROOT/app/ui/dist"
 # Pages wird aus einer KOPIE gebaut: das LAN-deploy (serve.py) nutzt dasselbe
@@ -63,6 +67,7 @@ window.__CONFIG__ = {
   VITE_MODEL_ENCODER_REPO: '${PAGES_MODEL_ENCODER_REPO}',
   VITE_MODEL_ENCODER_SUBFOLDER: '${PAGES_MODEL_ENCODER_SUBFOLDER}',
   VITE_MODEL_ENCODER_FILE: '${PAGES_MODEL_ENCODER_FILE}',
+  VITE_CANARY_REPO: '${PAGES_CANARY_REPO}',
 };
 EOF
 
