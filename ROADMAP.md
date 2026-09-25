@@ -56,6 +56,20 @@ scheitern lassen (Modell lädt nicht). Modell-Generation bei jedem Modelldatei-W
 bzw. `encoderQuant='int4'` festgelegt (Persistenz heilt alte Werte beim Boot). Engine-Pfad und i18n-Keys bleiben,
 Reaktivierung = 2 JSX-Zeilen. WebGPU-EP-Optionen an 1.30 angepasst (`{name:'webgpu'}`, Legacy-Felder entfernt).
 
+### Experiment-Branch `canary-web` — Canary-180M als zweite Modellfamilie
+NVIDIA **Canary-180M-Flash** (AED: FastConformer-Encoder + Transformer-Decoder, CC-BY-4.0, en/de/es/fr) als
+umschaltbares Modell in der Web-App. Quelle: `istupakov/canary-180m-flash-onnx` (int8: Encoder 133,7 MB +
+Decoder 79,5 MB), LAN-Mirror `/models-canary/`. Parakeet bleibt Default; kein Pages-/VPS-Deploy.
+
+- **M0 (fertig):** `CanaryEncoder` + `__ptBench.measureCanary()` (Encoder-only-Gate, ≥1,3× schneller als Parakeet?).
+- **M1/M3 (fertig, im Branch):** `CanaryModel` (AED-Greedy mit `decoder_mems`-KV-Cache), `CanaryTokenizer`
+  (`▁`→Space, Prompt `<|startofcontext|>…`, EOS `<|endoftext|>`), Modell-Dropdown in Einstellungen → Erweitert
+  (Sprache de/en/es/fr, PnC an/aus), Statistik-Env `modelFamily`.
+- **Erwartung offen:** kleinerer Encoder (180M vs 0,6B), aber autoregressiver Decoder → Tempo kann besser ODER
+  schlechter als Parakeet sein. **Client-Test nötig** (Wyse lädt keine Modelle).
+- **Abbruch:** wenn Encoder < 1,3× schneller, RTF nicht besser oder DE-Qualität schlechter → Branch verwerfen.
+- Feature-Grenzen v1: nur Transkription (keine Übersetzung, keine Timestamps, keine Chunk-Parallelität), 4 Sprachen.
+
 ## Empfohlene Reihenfolge (bei Fortsetzung)
 
 2 ✅ → 3 ✅ → **1 (Datei-Transkription)** → **4 (PWA)**; 5 jederzeit einschiebbar.

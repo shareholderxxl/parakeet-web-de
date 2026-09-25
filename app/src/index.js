@@ -5,6 +5,8 @@ import { getParakeetModel } from './hub.js';
 
 export { ParakeetModel } from './parakeet.js';
 export { CanaryEncoder } from './canary-encoder.js'; // canary-web experiment
+export { CanaryModel } from './canary.js'; // canary-web experiment
+export { CanaryTokenizer } from './tokenizer-canary.js'; // canary-web experiment
 export { defaultWasmThreads } from './backend.js';
 export { getModelFile, getModelText, getParakeetModel, getLocalModelFile, checkLocalModelFiles, resolveLocalModelBase, listLocalRepoFiles, resolveModelQuant, quantSatisfiable, HubDownloadError, QuantUnavailableError, shouldRetryLocally, evictModelFiles, isModelDeserializeError, modelFileCacheKeys } from './hub.js';
 

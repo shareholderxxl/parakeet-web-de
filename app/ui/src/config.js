@@ -21,6 +21,11 @@ export const CONFIG = {
   VITE_MODEL_ENCODER_REVISION: runtime.VITE_MODEL_ENCODER_REVISION ?? import.meta.env.VITE_MODEL_ENCODER_REVISION,
   VITE_MODEL_ENCODER_SUBFOLDER: runtime.VITE_MODEL_ENCODER_SUBFOLDER ?? import.meta.env.VITE_MODEL_ENCODER_SUBFOLDER,
   VITE_MODEL_ENCODER_FILE: runtime.VITE_MODEL_ENCODER_FILE ?? import.meta.env.VITE_MODEL_ENCODER_FILE,
+  // canary-web experiment: Canary-180M (AED) as an alternative model family.
+  // VITE_CANARY_REPO names the HF repo; VITE_CANARY_LOCAL_BASE the LAN mirror
+  // served under /models-canary/ when VITE_MODEL_SOURCE is 'local'.
+  VITE_CANARY_REPO: runtime.VITE_CANARY_REPO ?? import.meta.env.VITE_CANARY_REPO,
+  VITE_CANARY_LOCAL_BASE: runtime.VITE_CANARY_LOCAL_BASE ?? import.meta.env.VITE_CANARY_LOCAL_BASE,
   VITE_ANALYTICS_URL: runtime.VITE_ANALYTICS_URL ?? import.meta.env.VITE_ANALYTICS_URL,
   VITE_ANALYTICS_WEBSITE_ID: runtime.VITE_ANALYTICS_WEBSITE_ID ?? import.meta.env.VITE_ANALYTICS_WEBSITE_ID,
   // Every new VITE_* key the operator can set MUST be added here, otherwise

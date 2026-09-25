@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css';
 import './App.css';
-import { ParakeetModel, getParakeetModel, checkLocalModelFiles, defaultWasmThreads } from 'parakeet.js';
+import { ParakeetModel, getParakeetModel, checkLocalModelFiles, defaultWasmThreads, CanaryModel } from 'parakeet.js';
 import { useI18n } from './i18n.jsx';
 import { CONFIG } from './config.js';
 import { openIdb, idbGet, idbPut, idbDeleteDatabase } from '../../src/idb.js';
@@ -165,6 +165,10 @@ const STR = {
     langAuto: 'Die Transkriptionssprache wird automatisch erkannt (25 Sprachen inkl. Deutsch).',
     autoCopyLabel: 'Automatisch kopieren', advanced: 'Erweitert', chunkLabel: 'Lange Audios segmentieren',
     chunkDurLabel: 'Segmentlänge (s)', threadsLabel: 'CPU-Threads',
+    modelLabel: 'Modell', modelParakeet: 'Parakeet TDT 0.6B v3 (int4)',
+    modelCanary: 'Canary 180M Flash (Experiment)', canaryLangLabel: 'Sprache',
+    canaryPncLabel: 'Zeichensetzung/Großschreibung',
+    canaryHint: 'Canary 180M (en/de/es/fr), AED-Modell, nur CPU/WASM. Kleiner (213 MB), aber Decoder läuft Token für Token — Tempo testen. Nach dem Umschalten neu laden.',
     gpuLabel: 'GPU (WebGPU) verwenden', gpuActive: 'GPU-Backend aktiv',
     gpuInt4Note: 'WebGPU nutzt immer den int4-Encoder (int8 laeuft nur auf CPU). Achtung: In der aktuellen ORT-Version (1.27) rechnet int4 auf WebGPU mit fp16-Akkumulation und liefert teils falsche Texte – bis zum ORT-Update nicht empfehlenswert.',
     reloadNeeded: 'Geänderte Einstellung – Seite neu laden, damit sie wirkt.', reloadNow: 'Seite neu laden',
@@ -223,6 +227,10 @@ const STR = {
     langAuto: 'The transcription language is detected automatically (25 languages incl. German).',
     autoCopyLabel: 'Copy automatically', advanced: 'Advanced', chunkLabel: 'Chunk long audio',
     chunkDurLabel: 'Chunk length (s)', threadsLabel: 'CPU threads',
+    modelLabel: 'Model', modelParakeet: 'Parakeet TDT 0.6B v3 (int4)',
+    modelCanary: 'Canary 180M Flash (experimental)', canaryLangLabel: 'Language',
+    canaryPncLabel: 'Punctuation/capitalization',
+    canaryHint: 'Canary 180M (en/de/es/fr), an AED model, CPU/WASM only. Smaller (213 MB), but the decoder runs token by token — test the speed. Reload after switching.',
     gpuLabel: 'Use GPU (WebGPU)', gpuActive: 'GPU backend active',
     gpuInt4Note: 'WebGPU always uses the int4 encoder (int8 runs on CPU only). Warning: with the current ORT version (1.27) int4 on WebGPU accumulates in fp16 and can return wrong text – not recommended until ORT is updated.',
     reloadNeeded: 'Setting changed – reload the page for it to take effect.', reloadNow: 'Reload page',
@@ -268,6 +276,10 @@ export default function App() {
   const [chunkDuration, setChunkDuration] = useState(60);
   const [cpuThreads, setCpuThreads] = useState(MAX_THREADS);
   const [cpuThreadsMigrated, setCpuThreadsMigrated] = useState(false); // einmalige Default-Migration
+  // canary-web (Experiment): Modellfamilie + Canary-Optionen.
+  const [modelFamily, setModelFamily] = useState('parakeet'); // 'parakeet' | 'canary'
+  const [canaryLanguage, setCanaryLanguage] = useState('de');
+  const [canaryPnc, setCanaryPnc] = useState(true);
   const [theme, setTheme] = useState(currentTheme());
   const [showLicenses, setShowLicenses] = useState(false);
   const [cachePersist, setCachePersist] = useState(null); // null=unbekannt, true=dauerhaft
@@ -417,7 +429,7 @@ export default function App() {
   // Settings + History laden
   useEffect(() => {
     (async () => {
-      const [dic, per, ac, ch, cd, ct, hist, ur, ctMig] = await Promise.all([
+      const [dic, per, ac, ch, cd, ct, hist, ur, ctMig, mfam, clang, cpnc] = await Promise.all([
         loadSetting('dictationEnabled.v2', true),
         loadSetting('persistTranscripts', true), loadSetting('autoCopy', false),
         loadSetting('enableChunking', true), loadSetting('chunkDuration', 60),
@@ -425,12 +437,18 @@ export default function App() {
         loadPersistedTranscripts(),
         loadSetting('userDictationRules', []),
         loadSetting('cpuThreadsMigrated', false),
+        loadSetting('modelFamily', 'parakeet'),
+        loadSetting('canaryLanguage', 'de'),
+        loadSetting('canaryPnc', true),
       ]);
       setDictationEnabled(!!dic); setPersistTranscripts(!!per);
       setAutoCopy(!!ac); setEnableChunking(!!ch); setChunkDuration(Number(cd) || 60);
       const restoredThreads = restoreCpuThreads({ stored: Number(ct), migrated: !!ctMig, maxCores: MAX_CORES });
       setCpuThreads(Math.min(restoredThreads.threads, MAX_THREADS));
       setCpuThreadsMigrated(restoredThreads.migrationApplied || !!ctMig);
+      setModelFamily(mfam === 'canary' ? 'canary' : 'parakeet');
+      setCanaryLanguage(['de','en','es','fr'].includes(clang) ? clang : 'de');
+      setCanaryPnc(cpnc !== false);
       setTranscriptions(Array.isArray(hist) ? hist : []);
       setUserRules(Array.isArray(ur) ? ur : []);
       // WebGPU + Encoder-Quant sind voruebergehend ausgeblendet: fest auf die
@@ -450,6 +468,9 @@ export default function App() {
   usePersistedSetting('chunkDuration', chunkDuration, settingsLoaded);
   usePersistedSetting('cpuThreads', cpuThreads, settingsLoaded);
   usePersistedSetting('cpuThreadsMigrated', cpuThreadsMigrated, settingsLoaded);
+  usePersistedSetting('modelFamily', modelFamily, settingsLoaded);
+  usePersistedSetting('canaryLanguage', canaryLanguage, settingsLoaded);
+  usePersistedSetting('canaryPnc', canaryPnc, settingsLoaded);
   usePersistedSetting('useWebGPU', useWebGPU, settingsLoaded);
   usePersistedSetting('encoderQuant', encoderQuant, settingsLoaded);
   usePersistedSetting('userDictationRules', userRules, settingsLoaded);
@@ -538,7 +559,33 @@ export default function App() {
 
   /* ─── Modell laden ─── */
   const repoId = CONFIG.VITE_MODEL_REPO || 'efederici/parakeet-tdt-0.6b-v3-onnx-int4';
+  // Canary-180M (AED) laden: LAN-Mirror (/models-canary/) oder HuggingFace.
+  // Kein WebGPU/int4-Pfad — Canary laeuft WASM/int8.
+  async function loadCanaryModel() {
+    setStatus('loading'); setError(null);
+    try {
+      const repo = CONFIG.VITE_CANARY_REPO || 'istupakov/canary-180m-flash-onnx';
+      const source = CONFIG.VITE_MODEL_SOURCE || 'local';
+      const base = CONFIG.VITE_CANARY_LOCAL_BASE || '/models-canary/';
+      const url = (f) => (source === 'local'
+        ? base.replace(/\/?$/, '/') + f
+        : `https://huggingface.co/${repo}/resolve/main/${f}`);
+      modelRef.current = await CanaryModel.fromUrls({
+        encoderUrl: url('encoder-model.int8.onnx'),
+        decoderUrl: url('decoder-model.int8.onnx'),
+        vocabUrl: url('vocab.txt'),
+        cpuThreads: Number(cpuThreads),
+      });
+      setStatus('ready'); setCanRecord(true);
+      setLoadedEnv({ backend: 'wasm', encoderQuant: 'int8', cpuThreads: Number(cpuThreads), modelFamily: 'canary' });
+      requestCachePersist();
+    } catch (e) {
+      console.error('[loadCanaryModel]', e); setError(transcribeErrorMessage(e)); setStatus('error');
+    }
+  }
+
   async function loadModel(backendOverride) {
+    if (modelFamily === 'canary') return loadCanaryModel();
     const wantGpu = useWebGPU && webgpuAvailable && webgpuAdapter !== false;
     const backend = (typeof backendOverride === 'string' && backendOverride) || (wantGpu ? 'webgpu-hybrid' : 'wasm');
     // WebGPU kann nur den int4-Encoder (MatMulNBits); int8 wuerde auf fp32
@@ -584,7 +631,7 @@ export default function App() {
         collectTimings: true,
       });
       setStatus('ready'); setCanRecord(true);
-      setLoadedEnv({ backend, encoderQuant: effEncoderQuant, cpuThreads: Number(cpuThreads) });
+      setLoadedEnv({ backend, encoderQuant: effEncoderQuant, cpuThreads: Number(cpuThreads), modelFamily: 'parakeet' });
       if (backend !== 'wasm') flash(tr('gpuActive'));
       requestCachePersist();
     } catch (e) {
@@ -640,27 +687,40 @@ export default function App() {
     try {
       const audio16 = await resamplePcmTo16k(pcm, nativeRate);
       const dur = audio16.length / 16000;
+      let text = '';
+      let metrics = null;
       setChunkProg({ n: 0, total: 1 });
-      const res = await modelRef.current.transcribeChunked(audio16, 16000, {
-        enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
-        returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: BENCH_ENABLED,
-      }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
+      if (modelFamily === 'canary') {
+        // Canary (AED): ein Encoder-Lauf + autoregressiver Decoder; keine
+        // Chunk-Parallelitaet/Timestamps.
+        const res = await modelRef.current.transcribe(audio16, {
+          language: canaryLanguage, pnc: canaryPnc,
+        });
+        text = res.text || '';
+        metrics = res.metrics || null;
+      } else {
+        const res = await modelRef.current.transcribeChunked(audio16, 16000, {
+          enableChunking, chunkDurationSec: Number(chunkDuration), overlapSec: 2,
+          returnTimestamps: true, temperature: 0, beamWidth: 1, frameStride: 8, enableProfiling: BENCH_ENABLED,
+        }, ({ chunkNum, totalChunks }) => setChunkProg({ n: chunkNum, total: totalChunks || 1 }));
+        text = res.utterance_text || '';
+        metrics = res.metrics || null;
+      }
       setChunkProg(null);
       // Messwerte fuer den Statistik-Reiter (Timings werden immer gesammelt;
       // enableProfiling bleibt aus -> kein ORT-Session-Profiling-Overhead).
-      if (res.metrics) {
-        setPerfLast({ audioSec: +dur.toFixed(2), ...res.metrics });
+      if (metrics) {
+        setPerfLast({ audioSec: +dur.toFixed(2), ...metrics });
         setPerfAgg(a => ({
           n: a.n + 1,
           audio: a.audio + dur,
-          total: a.total + res.metrics.total_ms,
-          encode: a.encode + res.metrics.encode_ms,
-          decode: a.decode + res.metrics.decode_ms,
-          preprocess: a.preprocess + res.metrics.preprocess_ms,
-          tokenize: a.tokenize + res.metrics.tokenize_ms,
+          total: a.total + metrics.total_ms,
+          encode: a.encode + metrics.encode_ms,
+          decode: a.decode + metrics.decode_ms,
+          preprocess: a.preprocess + metrics.preprocess_ms,
+          tokenize: a.tokenize + (metrics.tokenize_ms || 0),
         }));
       }
-      let text = res.utterance_text || '';
       const entry = { id: Date.now(), text, timestamp: new Date().toLocaleString(lang === 'de' ? 'de-DE' : 'en-US'), wordCount: (text.match(/\S+/g) || []).length, durationSec: Math.round(dur * 10) / 10 };
       setTranscriptions(prev => [entry, ...prev]);
       insertAtCaret(applyDictation(text));
@@ -689,7 +749,8 @@ export default function App() {
   const needsReload = !!modelRef.current && !!loadedEnv && (
     loadedEnv.backend !== currentBackend ||
     loadedEnv.encoderQuant !== currentQuant ||
-    loadedEnv.cpuThreads !== Number(cpuThreads)
+    loadedEnv.cpuThreads !== Number(cpuThreads) ||
+    (loadedEnv.modelFamily || 'parakeet') !== modelFamily
   );
   const stats = (() => {
     const count = transcriptions.length;
@@ -867,6 +928,9 @@ export default function App() {
                     webgpuAdapterAvailable: webgpuAdapter ?? null,
                     cpuThreadsSetting: Number(cpuThreads),
                     encoderQuantSetting: encoderQuant,
+                    modelFamily: modelFamily,
+                    canaryLanguage: modelFamily === 'canary' ? canaryLanguage : null,
+                    canaryPnc: modelFamily === 'canary' ? canaryPnc : null,
                     modelSource: CONFIG.VITE_MODEL_SOURCE || null,
                     modelRepo: CONFIG.VITE_MODEL_REPO || null,
                     decoderRepo: CONFIG.VITE_MODEL_DECODER_REPO || null,
@@ -894,6 +958,14 @@ export default function App() {
             <label className="pt-row"><span>{tr('persistLabel')}</span><input type="checkbox" checked={persistTranscripts} onChange={e => setPersistTranscripts(e.target.checked)} /></label>
             <label className="pt-row"><span>{tr('autoCopyLabel')}</span><input type="checkbox" checked={autoCopy} onChange={e => setAutoCopy(e.target.checked)} /></label>
             <fieldset className="pt-fieldset"><legend>{tr('advanced')}</legend>
+              <label className="pt-row"><span>{tr('modelLabel')}</span><select value={modelFamily} onChange={e => setModelFamily(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="parakeet">{tr('modelParakeet')}</option><option value="canary">{tr('modelCanary')}</option></select></label>
+              {modelFamily === 'canary' && (
+                <>
+                  <label className="pt-row"><span>{tr('canaryLangLabel')}</span><select value={canaryLanguage} onChange={e => setCanaryLanguage(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}><option value="de">Deutsch</option><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option></select></label>
+                  <label className="pt-row"><span>{tr('canaryPncLabel')}</span><input type="checkbox" checked={canaryPnc} onChange={e => setCanaryPnc(e.target.checked)} /></label>
+                  <p className="pt-muted" style={{ margin: '2px 0 8px' }}>{tr('canaryHint')}</p>
+                </>
+              )}
               <label className="pt-row"><span>{tr('chunkLabel')}</span><input type="checkbox" checked={enableChunking} onChange={e => setEnableChunking(e.target.checked)} /></label>
               <label className="pt-row"><span>{tr('chunkDurLabel')}</span><input type="number" min="5" max="600" value={chunkDuration} onChange={e => setChunkDuration(e.target.value)} /></label>
               <label className="pt-row"><span>{tr('threadsLabel')}</span><select value={cpuThreads} onChange={e => setCpuThreads(e.target.value)} style={{ background: 'var(--bg-card)', color: 'var(--text)' }}>{Array.from({ length: MAX_THREADS }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
